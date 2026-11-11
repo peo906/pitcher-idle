@@ -1,7 +1,8 @@
 @import 'galmuri/dist/galmuri.css';
+@import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css';
 
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; background: #0b0d12; color: #f2f2f2; font-family: 'Galmuri11', sans-serif; }
+html, body { margin: 0; height: 100%; background: #0b0d12; color: #f2f2f2; font-family: 'Pretendard Variable', Pretendard, -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; }
 
 /* 16:9 stage, as large as the window allows */
 #wrap {
@@ -24,7 +25,7 @@ html, body { margin: 0; height: 100%; background: #0b0d12; color: #f2f2f2; font-
   text-shadow: 0 2px 0 #000, 2px 0 0 #000, -2px 0 0 #000, 0 -2px 0 #000;
 }
 #hud button { pointer-events: auto; }
-.hud-left #gold { font-weight: 700; font-size: 1.5em; color: #ffd84a; }
+.hud-left #gold { font-family: 'Galmuri11', monospace; font-weight: 700; font-size: 1.5em; color: #ffd84a; }   /* game number stays pixel */
 .hud-left #rate { font-size: .8em; color: #cfe6ff; }
 .hud-center { text-align: center; }
 .hud-center #player { font-size: .75em; color: #dde; margin-top: 2px; }
@@ -213,3 +214,10 @@ html, body { margin: 0; height: 100%; background: #0b0d12; color: #f2f2f2; font-
 .force-grid button.on { background: #3a9e5a; }
 .tools.two { margin-bottom: 4px; }
 #modal-admin h3 small { font-weight: normal; }
+
+/* Pretendard tuning: a little weight so text holds up over the busy pixel background */
+#hud, #matchbar, #panel, #toast { font-weight: 600; }
+.panel { font-weight: 500; }
+.panel h2, .panel h3, .panel-head, #toast b, .bug b { font-weight: 800; }
+.up .eff, .bug .side, #matchbar .bar span, #promo .bar span { font-weight: 500; }
+#hud, #matchbar, #toast { letter-spacing: -0.01em; }

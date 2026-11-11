@@ -10,6 +10,7 @@ import { FORCE } from './match.js';
 import { stage, nextStage, quote, buy, atCap, effectText, canPromote, promote, buffActive } from './economy.js';
 
 const $ = id => document.getElementById(id);
+let toastTimer = null;
 
 async function boot() {
   await Promise.all(['11px Galmuri11', '9px Galmuri9'].map(f => document.fonts.load(f))).catch(() => {});
@@ -136,7 +137,6 @@ async function boot() {
   $('btn-auto').onclick = () => { state.autoGame = !state.autoGame; save(); refreshMatch(); };
   refreshMatch();
 
-  let toastTimer = null;
   window.addEventListener('easter-egg', e => {
     const d = e.detail;
     $('toast').innerHTML = `<b>이스터에그 발견!</b><br>${d.name} <small>(${d.count}번째)</small>`;
@@ -201,23 +201,26 @@ async function boot() {
     STAGES.forEach((st, i) => {
       const b = document.createElement('button');
       b.textContent = st.name; b.dataset.i = i;
-      b.onclick = () => { scene().adminJump(i); markStage(); refresh(); };
+      b.onclick = () => { scene().adminJump(i); markStage(); refresh(); closeAdmin(`${st.name}(으)로 이동`); };
       grid.appendChild(b);
     });
     const fgrid = $('admin-force');
     for (const [key, f] of Object.entries(FORCE)) {
       const b = document.createElement('button');
       b.textContent = f.label;
-      b.onclick = () => {
-        scene().adminForce(key);
-        [...fgrid.children].forEach(x => x.classList.remove('on')); b.classList.add('on');
-        setTimeout(() => b.classList.remove('on'), 2500);
-      };
+      b.onclick = () => { scene().adminForce(key); closeAdmin(`다음 공: ${f.label}`); };
       fgrid.appendChild(b);
     }
     const markStage = () => [...grid.children].forEach(b => b.classList.toggle('on', Number(b.dataset.i) === state.stage));
     $('btn-admin').onclick = () => { markStage(); $('modal-admin').hidden = false; };
     $('admin-close').onclick = () => { $('modal-admin').hidden = true; };
+    // situation tests close the window so you can watch them happen
+    const closeAdmin = msg => {
+      $('modal-admin').hidden = true;
+      $('toast').innerHTML = `<small>관리자</small><br>${msg}`; $('toast').hidden = false;
+      clearTimeout(toastTimer); toastTimer = setTimeout(() => { $('toast').hidden = true; }, 1200);
+    };
+    const CLOSE = { game: '경기 시작', win: '승리로 종료', lose: '패배로 종료', shrink: '위축 최대', confident: '자신감 켜기', gauge: '출전 게이지 가득' };
     document.querySelectorAll('#modal-admin .tools button[data-act]').forEach(b => b.onclick = () => {
       const s = scene(), act = b.dataset.act;
       if (act === 'gold') addGold(STAGES[state.stage].cost || 1e6);
@@ -231,6 +234,7 @@ async function boot() {
       if (act === 'shrink') s.adminMood('shrink');
       if (act === 'confident') s.adminMood('confident');
       save(); refresh(); window.dispatchEvent(new CustomEvent('gold-pop'));
+      if (CLOSE[act]) closeAdmin(CLOSE[act]);
     });
   }
 

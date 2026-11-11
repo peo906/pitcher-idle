@@ -380,10 +380,11 @@ export default class Stadium extends Phaser.Scene {
     if (out && out.end) wait += 0.5;
     if (out && out.wild) wait += 0.8;
     if (out && out.end === 'hbp') wait += out.benchClear ? 6.5 : 1.2;
-    if (out && out.gameOver && out.gameOver.pulled) wait += 2.6;
+    if (out && out.gameOver && out.gameOver.pulled) wait += 4.2;
     if (out && out.gameOver) wait += 2.6;
     else if (out && out.inningOver) wait += 2.2;           // inning break
-    this.time.delayedCall(wait * 1000, () => this.pitch());
+    this.playing = true;
+    this.nextPitch = this.time.delayedCall(wait * 1000, () => this.pitch());
   }
 
   pickMiddle() {                        // 몰린 공: right over the heart of the plate
@@ -448,6 +449,7 @@ export default class Stadium extends Phaser.Scene {
   }
 
   caught(target, isStrike, out = null) {
+    this.time.delayedCall(450, () => { if (!(out && out.end)) this.playing = false; });
     this.ball.setVisible(false);
     this.mitt.setFrame(1);
     const kmh = speedKmh(state.lv.speed) + Phaser.Math.Between(-2, 2);
@@ -555,7 +557,9 @@ export default class Stadium extends Phaser.Scene {
     if (key === 'fly' || key === 'ground') this.time.delayedCall(landing, () => this.fxOut(key));
     if (key === 'single' || key === 'double' || key === 'triple') this.time.delayedCall(landing, () => this.fxHit(key));
     if (key === 'hr') this.time.delayedCall(landing, () => this.fxHomeRun());
-    if (out.end) this.time.delayedCall(dur * 0.6, () => this.afterPA(out));
+    // a 강판 waits until the hit's own effect has played, so the order reads hit -> PITCHER CHANGE
+    const pulled = out.gameOver && out.gameOver.pulled;
+    if (out.end) this.time.delayedCall(pulled ? landing + 1500 : dur * 0.6, () => this.afterPA(out));
     this.drawBoard(); this.emit();
     this.time.delayedCall(260, () => this.pitcher.play(this.breatheKey));
   }
@@ -724,6 +728,9 @@ export default class Stadium extends Phaser.Scene {
   adminForce(key) {                     // the next pitch will be this result (starts a game if needed)
     if (!this.match) { state.gauge = 0; this.startGame(); }
     this.forceNext = key;
+    // if the current pitch is already caught and we're only waiting, throw the forced one right away
+    const t = this.nextPitch;
+    if (t && !this.inBreak && !this.playing && t.getRemaining() > 400) { t.remove(false); this.nextPitch = this.time.delayedCall(300, () => this.pitch()); }
   }
   adminMood(kind) {
     const m = this.match; if (!m) return;
