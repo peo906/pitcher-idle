@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
-import { W, H, MULT, PITCH, ANCHOR, speedKmh, interval, zoneChance, goldMult } from '../config.js';
-import { stage, buffMult } from '../economy.js';
+import { W, H, MULT, PITCH, ANCHOR, speedKmh, interval, zoneChance, goldMult,
+  STAGE_TIER, STAGE_INNING, STAGE_GAUGE, BULLPEN_STAGE, SEASON_GAMES } from '../config.js';
+import { stage, buffMult, examReady, passExam } from '../economy.js';
+import { Match } from '../match.js';
+import { save } from '../state.js';
 import { state, addGold } from '../state.js';
 import { sfx } from '../sound.js';
 import { fmt } from '../format.js';
@@ -58,6 +61,14 @@ export default class Stadium extends Phaser.Scene {
     this.speedUnit = this.add.text(0, 0, 'km/h', { ...small, color: '#cfd8ea' }).setOrigin(0, 1);
     this.layoutSpeed();
 
+    this.board = this.add.graphics();
+    this.boardTop = this.add.text(cx, sb.y0 + 2, '', { ...small, color: '#ffe14a' }).setOrigin(0.5, 0).setVisible(false);
+    this.boardSpeed = this.add.text(sb.x1 - 5, sb.y1 - 3, '', { ...small, color: '#cfd8ea' }).setOrigin(1, 1).setVisible(false);
+    this.speedLabel = this.children.list.find(o => o.text === '구속');
+
+    this.batter = this.makeBatter();
+    this.batter.setVisible(false);
+
     this.makeParticles();
     this.flashRect = this.add.rectangle(0, 0, W, H, 0xffffff, 0).setOrigin(0);
     this.running = false;
@@ -102,27 +113,65 @@ export default class Stadium extends Phaser.Scene {
   startLoop() {
     if (this.running) return;
     this.running = true;
+    if (STAGE_GAUGE[state.stage] === 0) this.startGame();   // pro: always in a game
     this.pitch();
+  }
+
+  emit() { window.dispatchEvent(new CustomEvent('match-update', { detail: this.matchInfo() })); }
+  matchInfo() {
+    const m = this.match;
+    return m ? { mode: 'game', inning: m.inning, innings: m.innings, score: [m.teamRuns, m.runs], outs: m.outs,
+                 exam: m.exam, shrink: m.shrink, confident: m.confident, pro: STAGE_GAUGE[state.stage] === 0 }
+             : { mode: 'practice', gauge: state.gauge, max: STAGE_GAUGE[state.stage] };
+  }
+
+  startGame() {
+    const st = state.stage;
+    this.match = new Match({ innings: STAGE_INNING[st], tier: STAGE_TIER[st], bullpen: st === BULLPEN_STAGE, exam: examReady() });
+    this.popText(this.match.exam ? '진급 심사 경기!' : 'PLAY BALL!', '#ffffff', W / 2, 140, 2);
+    this.showBatter(true);
+    this.drawBoard();
+    this.emit();
+  }
+
+  // practice gauge, filled by practice pitches
+  practicePitchDone() {
+    const max = STAGE_GAUGE[state.stage];
+    if (!max) return;
+    state.gauge = Math.min(max, state.gauge + 1);
+    if (state.gauge >= max && state.autoGame) this.pendingGame = true;
+    this.emit();
+  }
+  requestGame() {                       // the HUD's "경기 출전" button
+    if (!this.match && state.gauge >= STAGE_GAUGE[state.stage]) this.pendingGame = true;
   }
 
   pitch() {
     if (!this.running) return;
+    if (!this.match && STAGE_GAUGE[state.stage] === 0) this.startGame();               // reached pro: games only
+    if (!this.match && this.pendingGame) { this.pendingGame = false; state.gauge = 0; this.startGame(); }
     const T = interval(state.lv.tempo);
     const windup = Math.max(PITCH.minWindup, T - PITCH.flight - PITCH.react);
-    const isStrike = Math.random() < zoneChance(state.lv.control);
+
+    let isStrike, out = null;
+    if (this.match) { out = this.match.pitch(state.lv); isStrike = out.inZone; }
+    else isStrike = Math.random() < zoneChance(state.lv.control);
     const target = this.pickTarget(isStrike);
 
-    // catcher sets the target
     this.mitt.setFrame(0);
     this.tweens.add({ targets: this.mitt, x: target.x, y: target.y, duration: Math.min(220, windup * 800), ease: 'Sine.easeOut' });
-
-    // windup: pitcher sinks a little, then releases
     this.pitcher.stop();
     this.tweens.add({
-      targets: this.pitcher, y: this.pitcherY + 2, duration: windup * 1000 * 0.8, yoyo: false,
-      onComplete: () => { this.pitcher.y = this.pitcherY; this.release(target, isStrike); },
+      targets: this.pitcher, y: this.pitcherY + 2, duration: windup * 1000 * 0.8,
+      onComplete: () => { this.pitcher.y = this.pitcherY; this.release(target, isStrike, out); },
     });
-    this.time.delayedCall(T * 1000, () => this.pitch());
+
+    // after a ball in play / end of game, give the play time to finish
+    let wait = T;
+    if (out && (out.call === 'inplay' || out.call === 'foul')) wait += out.call === 'foul' ? 0.5 : 1.3;
+    if (out && out.end) wait += 0.5;
+    if (out && out.gameOver) wait += 2.6;
+    this.time.delayedCall(wait * 1000, () => this.pitch());
   }
 
   pickTarget(isStrike) {
@@ -135,8 +184,9 @@ export default class Stadium extends Phaser.Scene {
     return { x: r(z.x0, z.x1), y: r(z.y1 + 6, z.y1 + 16) };
   }
 
-  release(target, isStrike) {
+  release(target, isStrike, out) {
     sfx('whoosh');
+    if (out && out.swing) this.time.delayedCall(PITCH.flight * 1000 * 0.55, () => this.swing());
     const from = ANCHOR.release;
     const b = this.ball.setVisible(true).setPosition(from.x, from.y).setScale(0.25);
     const p = { t: 0 };
@@ -148,11 +198,14 @@ export default class Stadium extends Phaser.Scene {
         b.y = from.y + (target.y - from.y) * t - 10 * Math.sin(Math.PI * t) * 0.4;   // slight carry
         b.setScale(0.25 + 1.15 * t);
       },
-      onComplete: () => this.caught(target, isStrike),
+      onComplete: () => {
+        if (out && (out.call === 'foul' || out.call === 'inplay')) this.contact(target, out);
+        else this.caught(target, isStrike, out);
+      },
     });
   }
 
-  caught(target, isStrike) {
+  caught(target, isStrike, out = null) {
     this.ball.setVisible(false);
     this.mitt.setFrame(1);
     const kmh = speedKmh(state.lv.speed) + Phaser.Math.Between(-2, 2);
@@ -174,15 +227,26 @@ export default class Stadium extends Phaser.Scene {
     sfx(isStrike ? 'strike' : 'ball');
 
     // gold
-    const gold = Math.floor(stage().base * goldMult(state.lv.speed) * (isStrike ? MULT.strike : MULT.ball) * buffMult());
-    addGold(gold);
+    const mult = out ? out.mult : (isStrike ? MULT.strike : MULT.ball);
+    const gold = this.payPitch(mult);
     state.pitches++; if (isStrike) state.strikes++;
+    this.lastKmh = kmh;
 
+    if (out) {
+      const label = { k3: 'STRIKE OUT!', k: 'STRIKE OUT!', walk: 'BALL FOUR' }[out.end]
+        || (out.call === 'ball' ? 'BALL' : 'STRIKE!');
+      const color = out.end === 'walk' || out.call === 'ball' ? '#d8dde8' : '#ffe14a';
+      this.popText(label, color, 150, 196, out.end ? 2.4 : 2);
+      if (out.end === 'k3') this.popText('3구 삼진 x2', '#ffb347', 150, 214, 1);
+      this.afterPA(out);
+    } else {
+      this.popText(isStrike ? 'STRIKE!' : 'BALL', isStrike ? '#ffe14a' : '#d8dde8', 150, 196, 2);
+      this.practicePitchDone();
+    }
     this.speedNum.setText(String(kmh));
     this.layoutSpeed();
-    this.popText(isStrike ? 'STRIKE!' : 'BALL', isStrike ? '#ffe14a' : '#d8dde8', 150, 196, 2);
+    this.drawBoard(); this.emit();
     this.goldPop(`+${fmt(gold)}`, target.x, target.y - 16);
-    window.dispatchEvent(new CustomEvent('gold-pop'));   // HUD bumps its counter
 
     // glove settles back
     this.time.delayedCall(260, () => {
@@ -190,6 +254,158 @@ export default class Stadium extends Phaser.Scene {
       this.tweens.add({ targets: this.mitt, x: ANCHOR.mittRest.x, y: ANCHOR.mittRest.y, duration: 200 });
       this.pitcher.play(this.breatheKey);
     });
+  }
+
+  payPitch(mult) {
+    const gold = Math.floor(stage().base * goldMult(state.lv.speed) * mult * buffMult());
+    addGold(gold);
+    if (this.match) this.match.gold += gold;
+    window.dispatchEvent(new CustomEvent('gold-pop'));
+    return gold;
+  }
+
+  // a batted ball: foul back over the catcher, or into the field
+  contact(target, out) {
+    this.ball.setVisible(true);
+    const kmh = speedKmh(state.lv.speed) + Phaser.Math.Between(-2, 2);
+    this.lastKmh = kmh; this.speedNum.setText(String(kmh)); this.layoutSpeed();
+    this.cameras.main.shake(60, 0.004);
+    sfx('bat');
+    const gold = this.payPitch(out.mult);
+    state.pitches++;
+    this.goldPop(`+${fmt(gold)}`, target.x, target.y - 16);
+
+    const r = Phaser.Math.Between;
+    const PATHS = {             // end point, arc height, duration ms, end scale
+      foul:   [target.x + (Math.random() < .5 ? -1 : 1) * r(60, 120), -30, 30, 380, 1.8],
+      fly:    [r(150, 330), r(126, 140), 70, 950, 0.25],
+      ground: [r(170, 310), r(166, 176), 4, 520, 0.4],
+      single: [r(130, 350), r(140, 150), 18, 650, 0.3],
+      double: [Math.random() < .5 ? r(70, 120) : r(360, 410), r(124, 132), 34, 800, 0.25],
+      triple: [Math.random() < .5 ? r(20, 60) : r(420, 460), r(118, 126), 40, 900, 0.22],
+      hr:     [r(60, 420), r(88, 100), 125, 1150, 0.18],
+    };
+    const key = out.call === 'foul' ? 'foul' : out.end;
+    const [ex, ey, h, dur, endScale] = PATHS[key];
+    const b = this.ball, sx = target.x, sy = target.y, p = { t: 0 };
+    this.tweens.add({ targets: p, t: 1, duration: dur, ease: key === 'foul' ? 'Quad.easeIn' : 'Sine.easeOut',
+      onUpdate: () => {
+        const t = p.t;
+        b.x = sx + (ex - sx) * t; b.y = sy + (ey - sy) * t - h * 4 * t * (1 - t);
+        b.setScale(1.4 + (endScale - 1.4) * t);
+      },
+      onComplete: () => b.setVisible(false),
+    });
+
+    const LABEL = { fly: ['FLY OUT', '#ffe14a'], ground: ['GROUND OUT', '#ffe14a'], single: ['HIT', '#ff8a7a'],
+      double: ['TWO-BASE HIT', '#ff8a7a'], triple: ['THREE-BASE HIT', '#ff8a7a'], hr: ['HOME RUN', '#ff5a4a'] };
+    if (key === 'foul') this.popText('FOUL', '#d8dde8', 150, 196, 2);
+    else this.time.delayedCall(dur * 0.6, () => this.popText(LABEL[key][0], LABEL[key][1], 150, 196, 2.4));
+    if (out.end) this.time.delayedCall(dur * 0.6, () => this.afterPA(out));
+    this.drawBoard(); this.emit();
+    this.time.delayedCall(260, () => this.pitcher.play(this.breatheKey));
+  }
+
+  // end of an at-bat: new batter, inning / game over
+  afterPA(out) {
+    if (!out.end) return;
+    this.emit();
+    if (out.gameOver) { this.time.delayedCall(500, () => this.endGame(out.gameOver)); return; }
+    if (out.inningOver) this.time.delayedCall(300, () => this.popText(`${out.inningOver}회 종료`, '#9fc4ff', W / 2, 140, 1.5));
+    this.time.delayedCall(350, () => this.showBatter(false));
+  }
+
+  endGame(res) {
+    const m = this.match;
+    if (res.bonusGold) { addGold(res.bonusGold); window.dispatchEvent(new CustomEvent('gold-pop')); }
+    state.record[res.win ? 'w' : res.draw ? 'd' : 'l']++;
+    window.dispatchEvent(new CustomEvent('game-over', { detail: { ...res, exam: m.exam } }));
+    this.popText(res.win ? 'WIN!' : res.draw ? 'DRAW' : 'LOSE', res.win ? '#ffe14a' : '#d8dde8', W / 2, 130, 3);
+    this.match = null;
+    this.batter.setVisible(false);
+    const pro = STAGE_GAUGE[state.stage] === 0;
+    if (pro) state.seasonGame = (state.seasonGame + 1) % SEASON_GAMES;
+    if (m.exam && res.win) this.time.delayedCall(900, () => passExam());
+    save();
+    this.time.delayedCall(2200, () => {
+      if (STAGE_GAUGE[state.stage] === 0) this.startGame();   // pro: next game right away
+      this.drawBoard(); this.emit();
+    });
+  }
+
+  // ---------------- scoreboard ----------------
+  drawBoard() {
+    const g = this.board, sb = ANCHOR.scoreboard, m = this.match;
+    g.clear();
+    const inGame = !!m;
+    this.boardTop.setVisible(inGame); this.boardSpeed.setVisible(inGame);
+    this.speedNum.setVisible(!inGame); this.speedUnit.setVisible(!inGame);
+    if (this.speedLabel) this.speedLabel.setVisible(!inGame);
+    if (!inGame) { this.hideBoardLabels(); return; }
+    this.boardTop.setText(`${m.inning}회   ${m.teamRuns} : ${m.runs}`);
+    this.boardSpeed.setText(this.lastKmh ? `${this.lastKmh}km/h` : '');
+    const row = (y, n, lit, color, label) => {
+      this.boardLabels = this.boardLabels || {};
+      const x0 = sb.x0 + 8;
+      if (!this.boardLabels[label]) this.boardLabels[label] = this.add.text(x0, y - 1, label, { fontFamily: 'Galmuri9', fontSize: '9px', color: '#cfd8ea' }).setOrigin(0, 0);
+      this.boardLabels[label].setVisible(true);
+      for (let i = 0; i < n; i++) {
+        g.fillStyle(i < lit ? color : 0x2d3a5e).fillCircle(x0 + 14 + i * 9, y + 4, 3);
+      }
+    };
+    const top = sb.y0 + 14;
+    row(top, 3, m.balls, 0x5ad25a, 'B');
+    row(top + 8, 2, m.strikes, 0xffd23c, 'S');
+    row(top + 16, 2, m.outs, 0xeb4646, 'O');
+    // bases diamond, right side
+    const bx = sb.x1 - 22, by = sb.y0 + 22;
+    const base = (x, y, on) => { g.fillStyle(on ? 0xffe14a : 0x2d3a5e).fillRect(x - 2, y - 2, 5, 5); };
+    base(bx + 7, by, m.bases[0]); base(bx, by - 7, m.bases[1]); base(bx - 7, by, m.bases[2]);
+  }
+  hideBoardLabels() { if (this.boardLabels) Object.values(this.boardLabels).forEach(t => t.setVisible(false)); }
+
+  // ---------------- batter (placeholder silhouette until real sprites) ----------------
+  makeBatter() {
+    const c = this.add.container(0, 0);
+    const body = this.add.graphics();
+    const fill = 0x27304d, rim = 0x0b0f1c, helmet = 0x1b2138;
+    body.fillStyle(rim).fillRoundedRect(-20, -62, 18, 64, 4).fillRoundedRect(4, -62, 18, 64, 4);
+    body.fillStyle(fill).fillRoundedRect(-18, -60, 14, 60, 3).fillRoundedRect(6, -60, 14, 60, 3);
+    body.fillStyle(rim).fillRoundedRect(-24, -116, 50, 60, 10);
+    body.fillStyle(fill).fillRoundedRect(-22, -114, 46, 56, 9);
+    body.fillStyle(0x323c60).fillRect(-14, -104, 4, 40);                    // back highlight
+    body.fillStyle(rim).fillCircle(2, -126, 16);
+    body.fillStyle(helmet).fillCircle(2, -126, 14);
+    body.fillStyle(0x3a4670).fillCircle(-4, -132, 4);                        // helmet shine
+    body.fillStyle(rim).fillRect(2, -126, 18, 5);                            // brim
+    const bat = this.add.graphics();
+    bat.fillStyle(rim).fillRoundedRect(-3, -66, 7, 68, 3);
+    bat.fillStyle(0xc89a5a).fillRoundedRect(-2, -64, 5, 64, 2);
+    bat.fillStyle(0x8a6436).fillRect(-2, -8, 5, 8);                          // grip
+    const batC = this.add.container(16, -100, [bat]).setAngle(-35);
+    const arms = this.add.graphics().fillStyle(rim).fillRoundedRect(4, -110, 16, 12, 5).fillStyle(fill).fillRoundedRect(5, -109, 14, 10, 4);
+    c.add([body, batC, arms]);
+    c.bat = batC;
+    c.setAlpha(0.96);
+    return c;
+  }
+
+  showBatter(first) {
+    const m = this.match; if (!m) return;
+    const lefty = m.lefty, b = this.batter;
+    const x = lefty ? 322 : 158, from = lefty ? W + 40 : -40;
+    b.setVisible(true).setScale(lefty ? -1 : 1, 1).setPosition(first ? x : from, 276);
+    b.bat.setAngle(-35);
+    if (!first) this.tweens.add({ targets: b, x, duration: 320, ease: 'Quad.easeOut' });
+    this.drawBoard();
+  }
+
+  swing() {
+    const b = this.batter; if (!b.visible) return;
+    sfx('swing');
+    this.tweens.add({ targets: b.bat, angle: { from: -35, to: 200 }, duration: 110, ease: 'Quad.easeIn',
+      onComplete: () => this.tweens.add({ targets: b.bat, angle: -35, delay: 280, duration: 200 }) });
+    this.tweens.add({ targets: b, angle: { from: 0, to: -4 }, duration: 110, yoyo: true, hold: 200 });
   }
 
   // ---------------- pitcher art & promotion ----------------

@@ -1,5 +1,5 @@
 // Spending gold: upgrades and promotion. Pure rules, no rendering.
-import { STAGES, UPGRADES, PROMO_BUFF, speedKmh, interval, zoneChance } from './config.js';
+import { STAGES, UPGRADES, PROMO_BUFF, EXAM, speedKmh, interval, zoneChance } from './config.js';
 import { state, save } from './state.js';
 
 export const stage = () => STAGES[state.stage];
@@ -36,6 +36,16 @@ export function canPromote() { const s = stage(); return s.cost !== null && stat
 export function promote() {
   if (!canPromote()) return false;
   state.gold -= stage().cost; state.stage++; state.buffUntil = Date.now() + PROMO_BUFF.ms; save();
+  window.dispatchEvent(new CustomEvent('stage-change'));
+  return true;
+}
+
+// 진급 심사: a game started with >= 80% of the cost saved. Winning it promotes for 80%.
+
+export function examReady() { const s = stage(); return s.cost !== null && state.gold >= s.cost * EXAM.at && state.gold < s.cost; }
+export function passExam() {
+  const s = stage(); if (s.cost === null) return false;
+  state.gold = Math.max(0, state.gold - s.cost * EXAM.at); state.stage++; state.buffUntil = Date.now() + PROMO_BUFF.ms; save();
   window.dispatchEvent(new CustomEvent('stage-change'));
   return true;
 }

@@ -96,6 +96,43 @@ async function boot() {
     $('panel-toggle').textContent = closed ? '◀' : '▶';
   };
   $('panel-toggle').textContent = '▶';
+
+  // ---- practice / game bar ----
+  let info = { mode: 'practice', gauge: state.gauge, max: 30 };
+  const refreshMatch = () => {
+    const game = info.mode === 'game';
+    $('mb-practice').hidden = game; $('mb-game').hidden = !game;
+    if (!game) {
+      const max = info.max || 1;
+      $('gauge-fill').style.width = (Math.min(1, state.gauge / max) * 100) + '%';
+      $('gauge-text').textContent = `${state.gauge} / ${max}`;
+      $('btn-game').disabled = state.gauge < max;
+      $('btn-auto').textContent = state.autoGame ? '자동 ON' : '자동 OFF';
+      $('btn-auto').classList.toggle('on', state.autoGame);
+    } else {
+      const rec = state.record;
+      $('mb-tag').textContent = info.exam ? '[진급 심사]' : info.pro ? `[시즌 ${state.seasonGame + 1}/30]` : '[경기]';
+      $('mb-info').textContent = `${info.inning}/${info.innings}회 · 우리 ${info.score[0]} : ${info.score[1]} 상대 · ${info.outs}아웃 · ${rec.w}승 ${rec.l}패 ${rec.d}무`;
+      const mood = $('mb-mood');
+      mood.className = info.shrink ? 'down' : info.confident ? 'up' : '';
+      mood.textContent = info.shrink ? `위축 +${info.shrink}%p` : info.confident ? '자신감!' : '';
+    }
+  };
+  window.addEventListener('match-update', e => { info = e.detail; refreshMatch(); });
+  $('btn-game').onclick = () => { const s = scene(); if (s) s.requestGame(); $('btn-game').disabled = true; };
+  $('btn-auto').onclick = () => { state.autoGame = !state.autoGame; save(); refreshMatch(); };
+  refreshMatch();
+
+  let toastTimer = null;
+  window.addEventListener('game-over', e => {
+    const r = e.detail;
+    const head = r.win ? '승리!' : r.draw ? '무승부' : '패배';
+    const exam = r.exam ? (r.win ? '<br><small>진급 심사 통과! 남은 20% 면제</small>' : '<br><small>진급 심사 실패, 다음 경기에 다시</small>') : '';
+    const bonus = r.label ? `<br>${r.label} 보너스 +${Math.round(r.bonus * 100)}% <b>+${fmt(r.bonusGold)}</b>` : '';
+    $('toast').innerHTML = `<b>${head}</b> <small>${r.score[0]} : ${r.score[1]}</small>${bonus}${exam}`;
+    $('toast').hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { $('toast').hidden = true; }, 2600);
+  });
   setInterval(refresh, 100);
   window.addEventListener('gold-pop', () => {
     const g = $('gold'); g.classList.remove('bump'); void g.offsetWidth; g.classList.add('bump'); refresh();

@@ -125,3 +125,37 @@ html, body { margin: 0; height: 100%; background: #0b0d12; color: #f2f2f2; font-
 .up button:disabled { background: #3a4568; color: #8792ad; cursor: not-allowed; }
 .up.flash { animation: upflash .3s ease-out; }
 @keyframes upflash { from { background: rgba(255, 216, 74, .45); } }
+
+/* ---- practice / game bar (bottom center) ---- */
+#matchbar {
+  position: absolute; left: 50%; bottom: 2.5%; transform: translateX(-50%);
+  font-size: max(10px, 1.3cqw); text-shadow: 0 2px 0 #000;
+  background: rgba(10, 14, 28, .8); border: 2px solid #000; border-radius: 8px; padding: .35em .6em;
+}
+#mb-practice, #mb-game { display: flex; align-items: center; gap: .5em; white-space: nowrap; }
+#mb-practice[hidden], #mb-game[hidden] { display: none; }
+#matchbar .lbl { color: #9fc4ff; font-size: .85em; }
+#matchbar .bar { position: relative; width: 11em; height: 1.2em; background: #0d1426; border: 2px solid #000; border-radius: 5px; overflow: hidden; }
+#matchbar .fill { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(#7fd0ff, #3d8ee0); transition: width .15s; }
+#matchbar .bar span { position: relative; display: block; text-align: center; font-size: .75em; line-height: 1.6em; }
+#matchbar button {
+  font-family: inherit; font-size: .8em; padding: .25em .6em; border: 2px solid #000; border-radius: 6px; cursor: pointer;
+  background: #2a3a66; color: #fff;
+}
+#btn-game:not(:disabled) { background: #e0a82e; color: #1a1205; animation: glow 1s ease-in-out infinite; }
+#btn-game:disabled { color: #8792ad; cursor: not-allowed; }
+#btn-auto.on { background: #3a9e5a; }
+#mb-tag { color: #ffe14a; }
+#mb-info { color: #fff; }
+#mb-mood.down { color: #ff7a6a; }
+#mb-mood.up { color: #7fe08a; }
+
+#toast {
+  position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%);
+  font-size: max(12px, 2cqw); text-align: center; padding: .6em 1.2em; line-height: 1.5;
+  background: rgba(10, 14, 28, .9); border: 3px solid #000; box-shadow: 0 0 0 3px #e0a82e inset; border-radius: 10px;
+  pointer-events: none; animation: toastIn .25s ease-out;
+}
+#toast b { color: #ffe14a; font-size: 1.3em; }
+#toast small { color: #9fc4ff; }
+@keyframes toastIn { from { transform: translate(-50%, -50%) scale(.6); opacity: 0; } }

@@ -20,6 +20,10 @@ export const state = {
   lv: { speed: 0, tempo: 0, control: 0, stuff: 0, end: 0 },
   buffUntil: 0,          // 진급 직후 버프 끝나는 시각
   bulk: 1,               // upgrade panel: 1, 10 or 'max'
+  gauge: 0,              // practice pitches toward the next game
+  autoGame: true,        // start a game as soon as the gauge is full
+  seasonGame: 0,         // pro: games played this season
+  record: { w: 0, l: 0, d: 0 },
 };
 const DEFAULT_LV = { speed: 0, tempo: 0, control: 0, stuff: 0, end: 0 };
 
@@ -61,6 +65,7 @@ function apply(obj) {
   Object.assign(state, obj, { v: VERSION });
   state.lv = { ...DEFAULT_LV, ...(obj.lv || {}) };     // older saves have no levels yet
   if (typeof state.stage !== 'number') state.stage = 0;
+  state.record = { w: 0, l: 0, d: 0, ...(obj.record || {}) };
 }
 
 // ---------- save codes ----------

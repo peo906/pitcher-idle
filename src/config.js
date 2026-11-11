@@ -24,6 +24,36 @@ export const STAGES = [
   { name: '국가대표',   cost: 1.1e12,  base: 60e4,  sprite: 'pro' },
   { name: '메이저리그', cost: null,    base: 100e4, sprite: 'pro' },
 ];
+// 경기 설정 (기획서 '연습과 경기', '타자 수준표', '경기 보너스')
+// tier per stage index, innings per stage, practice gauge per stage (0 = pro, no practice)
+export const TIERS = {
+  vw: { name: '매우 약함', contact: 0.65, hit: 0.22, hr: 0.05 },
+  w:  { name: '약함',     contact: 0.70, hit: 0.25, hr: 0.08 },
+  n:  { name: '보통',     contact: 0.75, hit: 0.28, hr: 0.10 },
+  s:  { name: '강함',     contact: 0.78, hit: 0.30, hr: 0.12 },
+  vs: { name: '매우 강함', contact: 0.80, hit: 0.32, hr: 0.15 },
+  p:  { name: '프로',     contact: 0.82, hit: 0.33, hr: 0.18 },
+  i:  { name: '국제·메이저', contact: 0.85, hit: 0.35, hr: 0.22 },
+};
+export const STAGE_TIER   = ['vw','vw','w','w','w','n','n','n','s','s','s','vs','p','p','p','p','i','i'];
+export const STAGE_INNING = [3,3,3,3,3,3,5,5,5,7,7,7,6,2,9,9,9,9];
+export const STAGE_GAUGE  = [30,30,30,30,30,30,40,40,40,50,50,50,0,0,0,0,0,0];
+export const BULLPEN_STAGE = 13;
+export const SEASON_GAMES = 30;
+
+export const JUDGE = {
+  swingIn: 0.80, swingOut: 0.35,     // chance the batter swings at a pitch in / out of the zone
+  foul: 0.30,                        // share of contact that goes foul
+  endPerLv: 0.006, stuffHitPerLv: 0.004, stuffHrPerLv: 0.003,
+  minContact: 0.40, minHit: 0.15, minHr: 0.02, maxZone: 0.85,
+  single: 0.70, double: 0.25,        // rest = triple
+};
+export const RESULT_MULT = { k3: 2.0, k: 1.5, out: 1.3 };   // on the pitch that ends the at-bat
+export const MOOD = { hit: 3, hr: 5, cap: 15, outHeal: 3, confZone: 0.03, confHit: 0.02, confStreak: 3 };
+export const GAME_BONUS = { perfect: 2.0, noHit: 1.0, shutout: 0.5, cgWin: 0.2, bullpen: 0.2 };
+export const TEAM_RUN = { chances: 2, p: 0.22 };            // our offense per inning
+export const EXAM = { at: 0.8 };                            // 진급 심사: 80% saved -> win waives 20%
+
 export const PROMO_BUFF = { mult: 1.5, ms: 10 * 60 * 1000 };   // 진급 직후 10분 골드 ×1.5
 
 // 능력치 (기획서 '능력치 업그레이드'). cost(lv) = base × ratio^lv
