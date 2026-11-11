@@ -120,7 +120,8 @@ export default class Stadium extends Phaser.Scene {
   emit() { window.dispatchEvent(new CustomEvent('match-update', { detail: this.matchInfo() })); }
   matchInfo() {
     const m = this.match;
-    return m ? { mode: 'game', inning: m.inning, innings: m.innings, score: [m.teamRuns, m.runs], outs: m.outs,
+    return m ? { mode: 'game', inning: m.inning, innings: m.innings, score: [m.teamRuns, m.runs],
+                 balls: m.balls, strikes: m.strikes, outs: this.inBreak ? 3 : m.outs, bases: [...m.bases],
                  exam: m.exam, shrink: m.shrink, confident: m.confident, pro: STAGE_GAUGE[state.stage] === 0 }
              : { mode: 'practice', gauge: state.gauge, max: STAGE_GAUGE[state.stage] };
   }
@@ -171,6 +172,7 @@ export default class Stadium extends Phaser.Scene {
     if (out && (out.call === 'inplay' || out.call === 'foul')) wait += out.call === 'foul' ? 0.5 : 1.3;
     if (out && out.end) wait += 0.5;
     if (out && out.gameOver) wait += 2.6;
+    else if (out && out.inningOver) wait += 2.2;           // inning break
     this.time.delayedCall(wait * 1000, () => this.pitch());
   }
 
@@ -311,8 +313,45 @@ export default class Stadium extends Phaser.Scene {
     if (!out.end) return;
     this.emit();
     if (out.gameOver) { this.time.delayedCall(500, () => this.endGame(out.gameOver)); return; }
-    if (out.inningOver) this.time.delayedCall(300, () => this.popText(`${out.inningOver}회 종료`, '#9fc4ff', W / 2, 140, 1.5));
+    if (out.inningOver) { this.inningBreak(out); return; }
     this.time.delayedCall(350, () => this.showBatter(false));
+  }
+
+  // 3 outs: stop for a beat so the change is obvious
+  inningBreak(out) {
+    const done = out.inningOver, next = done + 1;
+    this.inBreak = true;
+    this.emit();
+    window.dispatchEvent(new CustomEvent('inning-change', { detail: { done, next, scored: out.teamScored } }));
+
+    // batter walks off
+    this.tweens.add({ targets: this.batter, x: this.batter.scaleX < 0 ? W + 40 : -40, duration: 300, ease: 'Quad.easeIn' });
+
+    // banner band across the field
+    const band = this.add.rectangle(W / 2, 150, W, 34, 0x0b1020, 0.85).setScale(1, 0);
+    const line1 = this.add.rectangle(W / 2, 133, W, 2, 0xffe14a).setScale(0, 1);
+    const line2 = this.add.rectangle(W / 2, 167, W, 2, 0xffe14a).setScale(0, 1);
+    const t = this.add.text(W / 2, 150, `${done}회 종료`, { fontFamily: 'Galmuri11', fontSize: '11px', color: '#ffffff', stroke: '#000', strokeThickness: 2 })
+      .setOrigin(0.5).setScale(2).setAlpha(0);
+    this.tweens.add({ targets: band, scaleY: 1, duration: 180, ease: 'Quad.easeOut' });
+    this.tweens.add({ targets: [line1, line2], scaleX: 1, duration: 260, ease: 'Quad.easeOut' });
+    this.tweens.add({ targets: t, alpha: 1, duration: 150, delay: 120 });
+    this.time.delayedCall(800, () => {
+      t.setText(out.teamScored ? `우리 팀 ${out.teamScored}득점!` : `${next}회 시작`).setColor(out.teamScored ? '#ffe14a' : '#9fc4ff');
+      if (out.teamScored) { this.cameras.main.flash(120, 255, 240, 160); sfx('promote'); }
+    });
+    if (out.teamScored) this.time.delayedCall(1400, () => t.setText(`${next}회 시작`).setColor('#9fc4ff'));
+    this.time.delayedCall(1900, () => {
+      this.tweens.add({ targets: [band, line1, line2, t], alpha: 0, duration: 200, onComplete: () => [band, line1, line2, t].forEach(o => o.destroy()) });
+    });
+
+    // scoreboard blinks
+    const sb = ANCHOR.scoreboard;
+    const glow = this.add.rectangle(sb.x0, sb.y0, sb.x1 - sb.x0, sb.y1 - sb.y0, 0xffffff, 0).setOrigin(0);
+    this.tweens.add({ targets: glow, alpha: { from: 0.55, to: 0 }, duration: 220, repeat: 3, onComplete: () => glow.destroy() });
+    sfx('inning');
+
+    this.time.delayedCall(2100, () => { this.inBreak = false; this.drawBoard(); this.emit(); this.showBatter(false); });
   }
 
   endGame(res) {

@@ -111,14 +111,26 @@ async function boot() {
       $('btn-auto').classList.toggle('on', state.autoGame);
     } else {
       const rec = state.record;
-      $('mb-tag').textContent = info.exam ? '[진급 심사]' : info.pro ? `[시즌 ${state.seasonGame + 1}/30]` : '[경기]';
-      $('mb-info').textContent = `${info.inning}/${info.innings}회 · 우리 ${info.score[0]} : ${info.score[1]} 상대 · ${info.outs}아웃 · ${rec.w}승 ${rec.l}패 ${rec.d}무`;
-      const mood = $('mb-mood');
+      $('bug-inn').textContent = info.inning;
+      $('bug-of').textContent = '/' + info.innings;
+      $('bug-us').textContent = info.score[0];
+      $('bug-them').textContent = info.score[1];
+      ['b1', 'b2', 'b3'].forEach((k, i) => $('bug-' + k).classList.toggle('on', !!info.bases[i]));
+      const rows = document.querySelectorAll('.bug .count > div');
+      [info.balls, info.strikes, info.outs].forEach((n, r) =>
+        rows[r].querySelectorAll('i').forEach((dot, i) => dot.classList.toggle('on', i < n)));
+      $('bug-tag').textContent = info.exam ? '진급 심사' : info.pro ? `시즌 ${state.seasonGame + 1}/30` : '경기';
+      $('bug-rec').textContent = `${rec.w}승 ${rec.l}패 ${rec.d}무`;
+      const mood = $('bug-mood');
       mood.className = info.shrink ? 'down' : info.confident ? 'up' : '';
       mood.textContent = info.shrink ? `위축 +${info.shrink}%p` : info.confident ? '자신감!' : '';
     }
   };
   window.addEventListener('match-update', e => { info = e.detail; refreshMatch(); });
+  window.addEventListener('inning-change', () => {
+    const bug = document.querySelector('.bug');
+    bug.classList.remove('blink'); void bug.offsetWidth; bug.classList.add('blink');
+  });
   $('btn-game').onclick = () => { const s = scene(); if (s) s.requestGame(); $('btn-game').disabled = true; };
   $('btn-auto').onclick = () => { state.autoGame = !state.autoGame; save(); refreshMatch(); };
   refreshMatch();

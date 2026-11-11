@@ -94,7 +94,9 @@ export class Match {
   }
 
   endInning(out) {
-    for (let i = 0; i < TEAM_RUN.chances; i++) if (Math.random() < TEAM_RUN.p) this.teamRuns++;
+    let scored = 0;
+    for (let i = 0; i < TEAM_RUN.chances; i++) if (Math.random() < TEAM_RUN.p) scored++;
+    this.teamRuns += scored; out.teamScored = scored;
     this.outs = 0; this.bases = [0, 0, 0]; this.shrink = Math.floor(this.shrink / 2);
     out.inningOver = this.inning;
     if (this.inning >= this.innings) { this.over = true; out.gameOver = this.result(); }

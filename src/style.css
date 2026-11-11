@@ -159,3 +159,40 @@ html, body { margin: 0; height: 100%; background: #0b0d12; color: #f2f2f2; font-
 #toast b { color: #ffe14a; font-size: 1.3em; }
 #toast small { color: #9fc4ff; }
 @keyframes toastIn { from { transform: translate(-50%, -50%) scale(.6); opacity: 0; } }
+
+/* ---- broadcast-style score bug ---- */
+#matchbar:has(#mb-game:not([hidden])) { padding: .25em; }
+.bug { display: flex; align-items: stretch; gap: .5em; font-size: 1em; }
+.bug .inn { display: flex; align-items: center; gap: .1em; padding: 0 .45em; background: #1f2a4d; border-radius: 5px; }
+.bug .inn .arrow { color: #ffe14a; font-size: .7em; }
+.bug .inn b { font-size: 1.35em; color: #fff; }
+.bug .inn small { color: #9aa6c2; font-size: .75em; }
+.bug .teams { display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+.bug .team { display: flex; align-items: center; justify-content: space-between; gap: .6em; padding: 0 .4em; min-width: 5em; border-radius: 3px; }
+.bug .team.us { background: #1b4a8a; }
+.bug .team.them { background: #7a2430; }
+.bug .team span { font-size: .75em; color: #dfe6f5; }
+.bug .team b { font-size: 1em; color: #fff; }
+.bug .diamond { position: relative; width: 2.6em; }
+.bug .diamond i {
+  position: absolute; width: .8em; height: .8em; transform: rotate(45deg);
+  background: #2d3a5e; border: 1px solid #000;
+}
+.bug .diamond i.on { background: #ffe14a; box-shadow: 0 0 6px #ffe14a; }
+#bug-b2 { left: .9em; top: .2em; }
+#bug-b3 { left: .2em; top: .95em; }
+#bug-b1 { left: 1.6em; top: .95em; }
+.bug .count { display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+.bug .count div { display: flex; align-items: center; gap: 3px; }
+.bug .count em { font-style: normal; font-size: .7em; width: .9em; color: #cfd8ea; }
+.bug .count i { width: .62em; height: .62em; border-radius: 50%; background: #2d3a5e; border: 1px solid #000; }
+.bug .count div:nth-child(1) i.on { background: #5ad25a; box-shadow: 0 0 5px #5ad25a; }
+.bug .count div:nth-child(2) i.on { background: #ffd23c; box-shadow: 0 0 5px #ffd23c; }
+.bug .count div:nth-child(3) i.on { background: #eb4646; box-shadow: 0 0 5px #eb4646; }
+.bug .side { display: flex; flex-direction: column; justify-content: center; font-size: .7em; line-height: 1.35; padding-right: .2em; }
+#bug-tag { color: #ffe14a; }
+#bug-rec { color: #cfd8ea; }
+#bug-mood.down { color: #ff7a6a; }
+#bug-mood.up { color: #7fe08a; }
+.bug.blink { animation: bugblink .25s step-end 4; }
+@keyframes bugblink { 50% { filter: brightness(1.8); } }
