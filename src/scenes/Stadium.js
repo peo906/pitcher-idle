@@ -4,7 +4,7 @@ import { W, H, MULT, PITCH, ANCHOR, MISS, speedKmh, interval, zoneChance, goldMu
 import { stage, buffMult, examReady, passExam } from '../economy.js';
 import { Match } from '../match.js';
 import { pickPitch, mods as pitchMods, kmhFor } from '../arsenal.js';
-import { PITCH_BY_ID, BREAK, flightFor } from '../config.js';
+import { PITCH_BY_ID, BREAK, flightFor, breakEase } from '../config.js';
 import { drawPixelText, textWidth } from '../pixelfont.js';
 import { save } from '../state.js';
 import { state, addGold } from '../state.js';
@@ -435,8 +435,10 @@ export default class Stadium extends Phaser.Scene {
     // strike three: the last stretch plays in slow motion, the screen dims, then everything hits at once
     const isK = out && (out.end === 'k' || out.end === 'k3');
     const slowEase = t => (t < 0.35 ? Math.pow(t / 0.35, 2) * 0.62 : 0.62 + 0.38 * Math.pow((t - 0.35) / 0.65, 1.4));
-    // out-in: quick out of the hand, hangs in the middle so the break reads, then snaps into the mitt
-    const outIn = t => (t < 0.5 ? 0.5 * (1 - Math.pow(1 - 2 * t, 2)) : 0.5 + 0.5 * Math.pow(2 * t - 1, 2));
+    // speed: a fastball flies at an even pace; the bigger the break, the more it eases mid-flight
+    // (tuned so the fastest moment is never more than ~2.5x the slowest)
+    const ea = breakEase(br);
+    const outIn = t => t + ea * Math.sin(2 * Math.PI * t) / (2 * Math.PI);
     if (isK) {
       this.time.delayedCall(flightMs * 0.5, () => {
         this.dim.setAlpha(0);
@@ -444,7 +446,7 @@ export default class Stadium extends Phaser.Scene {
       });
     }
     this.tweens.add({
-      targets: p, t: 1, duration: flightMs * (isK ? 2.2 : 1.25), ease: isK ? slowEase : outIn,
+      targets: p, t: 1, duration: flightMs * (isK ? 2.2 : 1.1), ease: isK ? slowEase : outIn,
       onUpdate: () => {
         const t = p.t, f = Math.sin(Math.PI * Math.pow(t, br.k));
         let ox = br.dx * f, oy = br.dy * f;

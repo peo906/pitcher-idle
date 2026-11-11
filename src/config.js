@@ -150,19 +150,21 @@ export const COMBOS = [
 // dx > 0: ball sits to the catcher's right and breaks back left (slider/sweeper/cutter, glove side)
 // dx < 0: arm-side run (changeup, two-seam, sinker).  dy < 0: ball rides high, then drops in.
 export const BREAK = {
-  fastball:     { dx: 0,   dy: -7,  k: 1.2 },            // a little carry
-  curve:        { dx: 8,   dy: -64, k: 1.4 },             // pops up out of the hand, then rolls down
-  changeup:     { dx: -16, dy: -34, k: 3.0 },
-  slider:       { dx: 34,  dy: -10, k: 3.0 },
-  twoseam:      { dx: -18, dy: -10, k: 3.2 },
-  cutter:       { dx: 14,  dy: -5,  k: 4.0 },
-  sinker:       { dx: -14, dy: -38, k: 3.2 },
-  splitter:     { dx: 0,   dy: -54, k: 3.6 },            // comes in level like a fastball, then dives
-  knucklecurve: { dx: 10,  dy: -78, k: 1.8 },
-  fork:         { dx: 0,   dy: -68, k: 4.0 },
-  sweeper:      { dx: 56,  dy: -8,  k: 2.4 },
-  circlechange: { dx: -20, dy: -38, k: 3.0 },
-  knuckleball:  { dx: 0,   dy: -10, k: 1.0, wobble: 12 },
-  gyro:         { dx: 0,   dy: -4,  k: 1.2 },
+  fastball:     { dx: 0,   dy: -2,  k: 1.0 },            // essentially straight, even speed
+  gyro:         { dx: 0,   dy: 0,   k: 1.0 },
+  cutter:       { dx: 8,   dy: -2,  k: 1.4 },
+  twoseam:      { dx: -10, dy: -4,  k: 1.3 },
+  sinker:       { dx: -6,  dy: -10, k: 1.3 },
+  changeup:     { dx: -6,  dy: -10, k: 1.3 },
+  circlechange: { dx: -7,  dy: -10, k: 1.3 },
+  slider:       { dx: 20,  dy: -4,  k: 1.4 },
+  sweeper:      { dx: 27,  dy: -3,  k: 1.3 },
+  curve:        { dx: 3,   dy: -12, k: 1.2 },
+  knucklecurve: { dx: 4,   dy: -13, k: 1.2 },
+  splitter:     { dx: 0,   dy: -10, k: 1.5 },
+  fork:         { dx: 0,   dy: -11, k: 1.6 },
+  knuckleball:  { dx: 0,   dy: -4,  k: 1.0, wobble: 5 },
 };
+// how much the flight slows mid-way grows with the size of the break (fastball: none)
+export const breakEase = br => 0.25 * Math.min(1, (Math.abs(br.dx) + Math.abs(br.dy) * 1.5 + (br.wobble || 0) * 2) / 36);
 export const flightFor = id => PITCH.flight / Math.max(0.7, PITCH_BY_ID[id].speed) * (id === 'gyro' ? 0.85 : 1);
