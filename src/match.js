@@ -38,6 +38,16 @@ export class Match {
       if (this.checkPull(out)) { out.call = 'ball'; out.count = { b: this.balls, s: this.strikes, o: this.outs }; return out; }
     }
 
+    // 데드볼: a wide miss that runs into the batter. Batter takes first, forced runners move up.
+    if (miss === 'wide' && !swing && !out.wild && Math.random() < MISS.hbp) {
+      this.hbps = (this.hbps || 0) + 1;
+      out.call = 'hbp'; out.end = 'hbp';
+      out.benchClear = Math.random() < (this.hbps >= 2 ? MISS.benchClearRepeat : MISS.benchClear);
+      this.finishPA(out);
+      out.count = { b: this.balls, s: this.strikes, o: this.outs };
+      return out;
+    }
+
     if (!swing) {
       if (inZone) { this.strikes++; out.call = 'strike'; out.mult = 1.1; }
       else { this.balls++; out.call = 'ball'; }
@@ -83,7 +93,7 @@ export class Match {
       this.outStreak++; this.shrink = Math.max(0, this.shrink - MOOD.outHeal);
     } else {
       this.outStreak = 0;
-      if (e === 'walk') { this.walks++; this.walkAdvance(); }
+      if (e === 'walk' || e === 'hbp') { this.walks++; this.walkAdvance(); }
       else {
         this.hits++;
         this.shrink = Math.min(MOOD.cap, this.shrink + (e === 'hr' ? MOOD.hr : MOOD.hit));

@@ -136,6 +136,12 @@ async function boot() {
   refreshMatch();
 
   let toastTimer = null;
+  window.addEventListener('easter-egg', e => {
+    const d = e.detail;
+    $('toast').innerHTML = `<b>이스터에그 발견!</b><br>${d.name} <small>(${d.count}번째)</small>`;
+    $('toast').hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { $('toast').hidden = true; }, 3000);
+  });
   window.addEventListener('game-over', e => {
     const r = e.detail;
     const head = r.win ? '승리!' : r.draw ? '무승부' : '패배';

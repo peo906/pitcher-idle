@@ -45,6 +45,7 @@ export function sfx(name, power = 1) {
   if (name === 'buy') thump(880, 0.07, 0.06);
   if (name === 'oops') { thump(330, 0.09, 0.08); setTimeout(() => thump(220, 0.12, 0.08), 90); }
   if (name === 'cheer') swell(power);
+  if (name === 'thud') { thump(110, 0.14, 0.45); burst({ freq: 700, q: 0.7, dur: 0.07, vol: 0.3 }); }
   if (name === 'boom') { thump(70, 0.35, 0.7 * power); burst({ freq: 400, q: 0.5, dur: 0.25, vol: 0.35 * power }); }
   if (name === 'inning') [660, 880].forEach((f, i) => setTimeout(() => thump(f, 0.18, 0.1), i * 160));
   if (name === 'bat') { burst({ freq: 3200, q: 1.2, dur: 0.05, vol: 0.5, type: 'bandpass' }); thump(700, 0.06, 0.25); }

@@ -134,13 +134,14 @@ export default class Stadium extends Phaser.Scene {
   showBanner(lines, colors, ms) {
     this.banner = { lines, colors, until: this.time.now + ms, t0: this.time.now };
     this.drawBoard(); this.drawBanner();
-    this.time.delayedCall(ms, () => { if (this.banner && this.time.now >= this.banner.until) { this.banner = null; this.bannerG.clear(); this.drawBoard(); } });
+    this.time.delayedCall(ms + 20, () => this.drawBanner());   // drawBanner clears itself once expired
   }
 
   drawBanner() {
     const b = this.banner, g = this.bannerG, sb = ANCHOR.scoreboard;
     g.clear();
-    if (!b || this.time.now >= b.until) return;
+    if (!b) return;
+    if (this.time.now >= b.until) { this.banner = null; this.drawBoard(); return; }   // expired: back to the score
     const phase = Math.floor((this.time.now - b.t0) / 120);
     g.fillStyle(phase % 2 ? 0x1e2a50 : 0x12193a, 1).fillRect(sb.x0, sb.y0, sb.x1 - sb.x0, sb.y1 - sb.y0);
     const color = b.colors[phase % b.colors.length];
@@ -184,6 +185,71 @@ export default class Stadium extends Phaser.Scene {
     this.drawBoard(); this.emit();
     this.afterPA(out);                     // walk, or 강판 from a run that scored on the wild pitch
     this.time.delayedCall(260, () => this.pitcher.play(this.breatheKey));
+  }
+
+  batterBody(lefty) {                   // where a pitch hits the batter (his side facing the plate)
+    return { x: lefty ? 300 : 180, y: Phaser.Math.Between(176, 200) };
+  }
+
+  hitByPitch(target, out) {             // 데드볼: ball thumps the batter and drops
+    const b = this.ball, bt = this.batter, p = { t: 0 }, sx = target.x, sy = target.y;
+    const dir = sx < 240 ? 1 : -1;
+    this.tweens.add({ targets: p, t: 1, duration: 380, ease: 'Quad.easeOut',
+      onUpdate: () => { b.x = sx + dir * 30 * p.t; b.y = sy - 18 * Math.sin(Math.PI * p.t) + 50 * p.t * p.t; b.setScale(1.3 - 0.4 * p.t); },
+      onComplete: () => b.setVisible(false) });
+    this.cameras.main.shake(140, 0.007);
+    this.starBurst(target.x, target.y, 0.8);
+    sfx('thud');
+    // batter flinches, hops, then jogs toward first
+    const x0 = bt.x;
+    this.tweens.add({ targets: bt, angle: { from: 0, to: -dir * 10 }, x: x0 - dir * 6, duration: 90, yoyo: true, hold: 260 });
+    this.tweens.add({ targets: bt, y: bt.y - 6, duration: 120, yoyo: true, repeat: 1, delay: 120 });
+    this.payPitch(out.mult); state.pitches++;
+    this.popText('HIT BY PITCH', '#ff8a7a', 150, 196, 2);
+    this.showBanner(['HIT BY', 'PITCH'], [0xff8a7a, 0xffffff], 1400);
+    this.cheerFor('right', 900);
+    // pitcher tips his cap: a small bow
+    this.time.delayedCall(450, () => this.tweens.add({ targets: this.pitcher, y: this.pitcherY + 2, duration: 140, yoyo: true, repeat: 1 }));
+    this.time.delayedCall(300, () => { this.mitt.setFrame(0); this.tweens.add({ targets: this.mitt, x: ANCHOR.mittRest.x, y: ANCHOR.mittRest.y, duration: 200 }); });
+    this.drawBoard(); this.emit();
+    if (out.benchClear) this.time.delayedCall(700, () => this.benchClearing(out));
+    else this.afterPA(out);
+  }
+
+  // 이스터에그: both dugouts empty onto the field
+  benchClearing(out) {
+    state.benchClears = (state.benchClears || 0) + 1;
+    this.showBanner(['BENCH', 'CLEAR!'], [0xff5a4a, 0xffe14a, 0xffffff], 4600);
+    this.cheerFor('both', 4600);
+    sfx('cheer', 1); sfx('boom', 0.6);
+    this.cameras.main.shake(400, 0.006);
+    this.batter.setVisible(false);
+    const players = [], spot = () => ({ x: Phaser.Math.Between(196, 284), y: Phaser.Math.Between(150, 176) });
+    const make = (team, i) => {
+      const ours = team === 'ours';
+      const g = this.add.graphics();
+      g.fillStyle(0x0b0f1c).fillRect(-3, -15, 7, 16);
+      g.fillStyle(ours ? 0xf2f2f2 : 0x9c2b36).fillRect(-2, -14, 5, 9);        // jersey
+      g.fillStyle(ours ? 0x1f2d5c : 0x3a3a3a).fillRect(-2, -5, 5, 5);         // pants
+      g.fillStyle(0xecbe96).fillRect(-1, -18, 3, 3);                          // face
+      g.fillStyle(ours ? 0x1f2d5c : 0x9c2b36).fillRect(-2, -20, 5, 2);        // cap
+      const startX = ours ? -10 - i * 6 : W + 10 + i * 6, startY = 150 + (i % 4) * 6;
+      g.setPosition(startX, startY);
+      const to = spot();
+      this.tweens.add({ targets: g, x: to.x, y: to.y, duration: 700 + i * 60, ease: 'Quad.easeOut' });
+      // scuffle: jitter in place
+      this.tweens.add({ targets: g, x: `+=${Phaser.Math.Between(-3, 3)}`, y: `-=2`, duration: 90, yoyo: true, repeat: 16, delay: 900 + i * 60 });
+      // walk back
+      this.tweens.add({ targets: g, x: startX, y: startY, duration: 900, delay: 3600 + i * 30, ease: 'Quad.easeIn', onComplete: () => g.destroy() });
+      players.push(g);
+    };
+    for (let i = 0; i < 10; i++) { make('ours', i); make('theirs', i); }
+    // dust cloud over the pile-up
+    this.time.addEvent({ delay: 120, repeat: 20, startAt: 0, callback: () => this.dust.explode(6, Phaser.Math.Between(205, 275), Phaser.Math.Between(150, 172)) });
+    this.time.delayedCall(1000, () => this.popText('벤치클리어링!', '#ffe14a', W / 2, 118, 2));
+    window.dispatchEvent(new CustomEvent('easter-egg', { detail: { name: '벤치클리어링', count: state.benchClears } }));
+    save();
+    this.time.delayedCall(4700, () => this.afterPA(out));
   }
 
   pullSequence(out) {                   // 강판: the pitcher hangs his head and walks off
@@ -289,13 +355,15 @@ export default class Stadium extends Phaser.Scene {
     const windup = Math.max(PITCH.minWindup, T - PITCH.flight - PITCH.react);
 
     let isStrike, out = null, miss = null;
+    const lefty = this.match && this.match.lefty;          // the batter at the plate now (pitch() may roll the next one)
     if (this.match) { out = this.match.pitch(state.lv); isStrike = out.inZone; miss = out.miss; }
     else {
       miss = Math.random() < missChance(state.lv.control) ? (Math.random() < MISS.wideShare ? 'wide' : 'middle') : null;
       isStrike = miss === 'middle' ? true : miss === 'wide' ? false : Math.random() < zoneChance(state.lv.control);
     }
     // target = where the ball really goes, call = where the catcher asked for it
-    const target = miss === 'middle' ? this.pickMiddle() : this.pickTarget(isStrike);
+    const target = out && out.end === 'hbp' ? this.batterBody(lefty)
+      : miss === 'middle' ? this.pickMiddle() : this.pickTarget(isStrike);
     const call = miss ? this.pickCall(target) : target;
 
     this.mitt.setFrame(0);
@@ -311,6 +379,7 @@ export default class Stadium extends Phaser.Scene {
     if (out && (out.call === 'inplay' || out.call === 'foul')) wait += out.call === 'foul' ? 0.5 : 1.3;
     if (out && out.end) wait += 0.5;
     if (out && out.wild) wait += 0.8;
+    if (out && out.end === 'hbp') wait += out.benchClear ? 6.5 : 1.2;
     if (out && out.gameOver && out.gameOver.pulled) wait += 2.6;
     if (out && out.gameOver) wait += 2.6;
     else if (out && out.inningOver) wait += 2.2;           // inning break
@@ -343,7 +412,8 @@ export default class Stadium extends Phaser.Scene {
     if (miss) {
       this.time.delayedCall(40, () => this.missReaction());
       // catcher lunges late; on a wild pitch he gets there a beat too slow
-      const reach = out && out.wild ? { x: target.x + (target.x < 240 ? 14 : -14), y: target.y - 6 } : target;
+      const reach = out && out.end === 'hbp' ? { x: (target.x + 240) / 2, y: target.y + 10 }
+        : out && out.wild ? { x: target.x + (target.x < 240 ? 14 : -14), y: target.y - 6 } : target;
       this.tweens.add({ targets: this.mitt, x: reach.x, y: reach.y, delay: PITCH.flight * 1000 * 0.45,
         duration: PITCH.flight * 1000 * 0.55, ease: 'Quad.easeOut' });
     }
@@ -370,6 +440,7 @@ export default class Stadium extends Phaser.Scene {
       },
       onComplete: () => {
         if (out && out.wild) this.wildPitch(target, out);
+        else if (out && out.end === 'hbp') this.hitByPitch(target, out);
         else if (out && (out.call === 'foul' || out.call === 'inplay')) this.contact(target, out);
         else this.caught(target, isStrike, out);
       },

@@ -60,6 +60,8 @@ export const MISS = {
   moodPer: 0.5,                               // 위축 1%p당 실투 +0.5%p
   wideShare: 0.75,                            // the rest is a "몰린 공"
   wildPitch: 0.12,                            // a wide miss with runners on gets past the catcher
+  hbp: 0.05,                                  // a wide miss the batter doesn't swing at hits him (데드볼)
+  benchClear: 0.06, benchClearRepeat: 0.30,   // 이스터에그: chance per 데드볼 (2nd 데드볼 in a game: much higher)
   middle: { swing: 0.95, contactBonus: 0.10, hitMult: 1.6, hrMult: 2.0 },
 };
 export const missChance = (controlLv, shrink = 0) =>
