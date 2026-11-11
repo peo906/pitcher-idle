@@ -448,6 +448,25 @@ export default class Stadium extends Phaser.Scene {
   }
 
   // ---------------- pitcher art & promotion ----------------
+  // ---------------- admin tools ----------------
+  // jump straight to a stage: drop any game in progress, reset the gauge, swap the pitcher art
+  adminJump(i) {
+    this.match = null; this.inBreak = false; this.pendingGame = false;
+    this.batter.setVisible(false);
+    state.stage = i; state.gauge = 0; save();
+    this.applyPitcherArt();
+    if (STAGE_GAUGE[i] === 0) this.startGame();
+    this.drawBoard(); this.emit();
+    window.dispatchEvent(new CustomEvent('gold-pop'));
+    this.popText(`${stage().name} (관리자 이동)`, '#9fc4ff', W / 2, 140, 1.5);
+  }
+  adminStartGame() { if (!this.match) { state.gauge = 0; this.startGame(); } }
+  adminEndGame(win) {
+    const m = this.match; if (!m) return;
+    if (win) m.teamRuns = m.runs + 1; else m.runs = m.teamRuns + 1;
+    m.over = true; this.endGame(m.result());
+  }
+
   applyPitcherArt() {
     const key = stage().sprite, meta = this.cache.json.get('sprites')['pitcher_' + key];
     this.breatheKey = 'breathe_' + key;

@@ -25,6 +25,7 @@
       </div>
       <div class="hud-right">
         <button id="btn-sound" title="사운드">소리</button>
+        <button id="btn-admin" title="관리자" hidden>관리자</button>
         <button id="btn-settings" title="설정">설정</button>
       </div>
     </div>
@@ -87,6 +88,28 @@
         <p id="offline-text"></p>
         <div class="big" id="offline-gold"></div>
         <div class="row"><button id="offline-ok" class="primary">받기</button></div>
+      </div>
+    </div>
+
+    <!-- admin (only with ?admin in the address) -->
+    <div class="modal" id="modal-admin" hidden>
+      <div class="panel wide">
+        <h2>관리자 모드</h2>
+        <h3>단계 이동</h3>
+        <div class="stage-grid" id="admin-stages"></div>
+        <h3>도구</h3>
+        <div class="tools">
+          <button data-act="gold">골드 + 다음 진급 비용만큼</button>
+          <button data-act="gold10">골드 x10</button>
+          <button data-act="gauge">출전 게이지 가득</button>
+          <button data-act="game">지금 경기 시작</button>
+          <button data-act="win">경기 승리로 끝내기</button>
+          <button data-act="lose">경기 패배로 끝내기</button>
+          <button data-act="maxlv">능력치 전부 +10</button>
+          <button data-act="resetlv">능력치 초기화</button>
+        </div>
+        <p class="hint">관리자 모드는 주소 끝에 ?admin 을 붙였을 때만 보여요. 관리자 기능으로 바꾼 내용도 저장돼요.</p>
+        <div class="row end"><button id="admin-close" class="primary">닫기</button></div>
       </div>
     </div>
 

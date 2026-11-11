@@ -200,3 +200,11 @@ html, body { margin: 0; height: 100%; background: #0b0d12; color: #f2f2f2; font-
 /* bar labels: center vertically instead of relying on line-height (fixes clipped text) */
 #promo .bar, #matchbar .bar { display: flex; align-items: center; justify-content: center; height: 1.45em; }
 #promo .bar span, #matchbar .bar span { line-height: 1; padding-top: 1px; }
+
+/* ---- admin ---- */
+.panel.wide { width: min(94%, 640px); }
+.stage-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.stage-grid button, .tools button { font-size: 12px; padding: 6px 4px; }
+.stage-grid button.on { background: #e0a82e; color: #1a1205; }
+.tools { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+#btn-admin { background: rgba(120, 30, 40, .85) !important; }
