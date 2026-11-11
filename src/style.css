@@ -61,3 +61,11 @@ html, body { margin: 0; height: 100%; background: #0b0d12; color: #f2f2f2; font-
 }
 .panel button.primary { background: #e0a82e; color: #1a1205; }
 .panel button:hover { filter: brightness(1.12); }
+
+/* HUD gold counter bumps on every catch */
+#gold { display: inline-block; transform-origin: left center; }
+#gold.bump { animation: bump .22s ease-out; }
+@keyframes bump {
+  0%   { transform: scale(1.18); color: #fff3b0; }
+  100% { transform: scale(1);    color: #ffd84a; }
+}

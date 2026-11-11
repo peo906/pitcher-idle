@@ -38,6 +38,9 @@ async function boot() {
     $('btn-sound').textContent = state.sound ? '소리 ON' : '소리 OFF';
   };
   setInterval(refresh, 100);
+  window.addEventListener('gold-pop', () => {
+    const g = $('gold'); g.classList.remove('bump'); void g.offsetWidth; g.classList.add('bump'); refresh();
+  });
 
   const toggleSound = () => { setSound(!state.sound); save(); refresh(); syncSettings(); };
   $('btn-sound').onclick = toggleSound;

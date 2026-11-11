@@ -56,6 +56,7 @@ export default class Stadium extends Phaser.Scene {
     this.speedUnit = this.add.text(0, sb.y0 + 28, 'km/h', { ...font, color: '#cfd8ea' }).setOrigin(0, 0);
     this.layoutSpeed();
 
+    this.makeParticles();
     this.flashRect = this.add.rectangle(0, 0, W, H, 0xffffff, 0).setOrigin(0);
     this.running = false;
   }
@@ -155,14 +156,19 @@ export default class Stadium extends Phaser.Scene {
     const kmh = speedKmh(STATS.speedLv) + Phaser.Math.Between(-2, 2);
     const power = Phaser.Math.Clamp((kmh - 80) / 80, 0.6, 1.2);
 
-    // hit-stop + shake + flash = the "pop"
-    this.tweens.timeScale = 0;
-    setTimeout(() => { this.tweens.timeScale = 1; }, 50);
-    this.cameras.main.shake(70, 0.004 * power);
-    this.flashRect.setAlpha(0.18);
-    this.tweens.add({ targets: this.flashRect, alpha: 0, duration: 90 });
-    this.tweens.add({ targets: this.mitt, scale: { from: 1.12, to: 1 }, duration: 120 });
-    sfx('mitt', power);
+    // ---- the "pop": everything lands on the same frame ----
+    const juice = isStrike ? 1 : 0.6;                   // strikes hit harder than balls
+    this.hitStop(isStrike ? 70 : 45);
+    this.cameras.main.shake(90, 0.006 * power * juice);
+    this.zoomPunch(0.03 * juice);
+    this.flashRect.setAlpha(0.22 * juice);
+    this.tweens.add({ targets: this.flashRect, alpha: 0, duration: 110 });
+    this.mittRecoil(target, juice);
+    this.impactRing(target.x, target.y, isStrike ? 0xffe14a : 0xffffff, juice);
+    this.starBurst(target.x, target.y, juice);
+    this.sparks.explode(isStrike ? 16 : 8, target.x, target.y);
+    this.dust.explode(6, target.x, target.y + 2);
+    sfx('mitt', power * (0.85 + 0.15 * juice));
     sfx(isStrike ? 'strike' : 'ball');
 
     // gold
@@ -173,7 +179,8 @@ export default class Stadium extends Phaser.Scene {
     this.speedNum.setText(String(kmh));
     this.layoutSpeed();
     this.popText(isStrike ? 'STRIKE!' : 'BALL', isStrike ? '#ffe14a' : '#d8dde8', 150, 196, 2);
-    this.popText(`+${fmt(gold)}`, '#ffd84a', target.x, target.y - 14, 1);
+    this.goldPop(`+${fmt(gold)}`, target.x, target.y - 16);
+    window.dispatchEvent(new CustomEvent('gold-pop'));   // HUD bumps its counter
 
     // glove settles back
     this.time.delayedCall(260, () => {
@@ -181,6 +188,62 @@ export default class Stadium extends Phaser.Scene {
       this.tweens.add({ targets: this.mitt, x: ANCHOR.mittRest.x, y: ANCHOR.mittRest.y, duration: 200 });
       this.pitcher.play('breathe');
     });
+  }
+
+  // ---------------- juice helpers ----------------
+  hitStop(ms) {                         // freeze motion for a beat
+    this.tweens.timeScale = 0;
+    this.anims.pauseAll();
+    setTimeout(() => { this.tweens.timeScale = 1; this.anims.resumeAll(); }, ms);
+  }
+
+  zoomPunch(amount) {                   // quick push-in toward the mitt
+    const cam = this.cameras.main;
+    cam.setZoom(1 + amount);
+    this.tweens.add({ targets: cam, zoom: 1, duration: 140, ease: 'Quad.easeOut' });
+  }
+
+  mittRecoil(target, juice) {           // glove gets shoved back, squashes, springs back
+    const m = this.mitt;
+    m.setPosition(target.x, target.y + 3 * juice).setScale(1 + 0.18 * juice, 1 - 0.14 * juice);
+    this.tweens.add({ targets: m, y: target.y, scaleX: 1, scaleY: 1, duration: 160, ease: 'Back.easeOut' });
+  }
+
+  starBurst(x, y, juice) {              // 2-frame white cross flash right on the ball
+    const g = this.add.graphics({ x, y }).fillStyle(0xffffff, 1);
+    const L = Math.round(8 + 8 * juice);
+    g.fillRect(-L, -1, L * 2, 2).fillRect(-1, -L, 2, L * 2);
+    g.fillRect(-L / 2, -L / 2, 2, 2).fillRect(L / 2 - 2, -L / 2, 2, 2).fillRect(-L / 2, L / 2 - 2, 2, 2).fillRect(L / 2 - 2, L / 2 - 2, 2, 2);
+    this.time.delayedCall(70, () => g.destroy());
+  }
+
+  impactRing(x, y, color, juice) {
+    const ring = this.add.circle(x, y, 6, color, 0).setStrokeStyle(3, color, 1);
+    this.tweens.add({ targets: ring, radius: 8 + 18 * juice, alpha: 0, duration: 260, ease: 'Quad.easeOut',
+      onUpdate: () => ring.setStrokeStyle(Math.max(1, 2 * ring.alpha), color, ring.alpha),
+      onComplete: () => ring.destroy() });
+  }
+
+  makeParticles() {
+    const g = this.make.graphics({ add: false });
+    g.fillStyle(0xffffff).fillRect(0, 0, 2, 2); g.generateTexture('px2', 2, 2);
+    g.clear().fillStyle(0xffffff).fillRect(0, 0, 1, 1); g.generateTexture('px1', 1, 1); g.destroy();
+    this.sparks = this.add.particles(0, 0, 'px2', {
+      speed: { min: 40, max: 110 }, angle: { min: 0, max: 360 }, lifespan: { min: 160, max: 280 },
+      scale: { start: 1.5, end: 0 }, tint: [0xffffff, 0xffe14a, 0xffb347], gravityY: 120, emitting: false,
+    });
+    this.dust = this.add.particles(0, 0, 'px1', {
+      speed: { min: 10, max: 35 }, angle: { min: 200, max: 340 }, lifespan: 380,
+      alpha: { start: 0.9, end: 0 }, tint: [0xd9b48a, 0xbf9466], emitting: false,
+    });
+  }
+
+  goldPop(str, x, y) {                  // number pops big, settles, floats away
+    const t = this.add.text(x, y, str, { fontFamily: 'Galmuri11', fontSize: '11px', color: '#ffd84a', stroke: '#000', strokeThickness: 2 })
+      .setOrigin(0.5).setScale(2);
+    this.tweens.add({ targets: t, scale: 1, duration: 140, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: t, y: y - 14, alpha: { from: 1, to: 0 }, delay: 260, duration: 520, ease: 'Quad.easeIn',
+      onComplete: () => t.destroy() });
   }
 
   popText(str, color, x, y, scale) {
