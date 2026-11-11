@@ -75,7 +75,9 @@ export default class Stadium extends Phaser.Scene {
     this.batter.setVisible(false);
 
     this.makeParticles();
-    this.flashRect = this.add.rectangle(0, 0, W, H, 0xffffff, 0).setOrigin(0);
+    this.dim = this.add.rectangle(0, 0, W, H, 0x000814, 1).setOrigin(0).setAlpha(0);
+    this.children.moveBelow(this.dim, this.ball);           // dim the stadium, keep ball and mitt bright
+    this.flashRect = this.add.rectangle(0, 0, W, H, 0xffffff, 1).setOrigin(0).setAlpha(0);
     this.running = false;
   }
 
@@ -271,8 +273,17 @@ export default class Stadium extends Phaser.Scene {
     const from = ANCHOR.release;
     const b = this.ball.setVisible(true).setPosition(from.x, from.y).setScale(0.25);
     const p = { t: 0 };
+    // strike three: the last stretch plays in slow motion, the screen dims, then everything hits at once
+    const isK = out && (out.end === 'k' || out.end === 'k3');
+    const slowEase = t => (t < 0.35 ? Math.pow(t / 0.35, 2) * 0.62 : 0.62 + 0.38 * Math.pow((t - 0.35) / 0.65, 1.4));
+    if (isK) {
+      this.time.delayedCall(PITCH.flight * 1000 * 0.5, () => {
+        this.dim.setAlpha(0);
+        this.tweens.add({ targets: this.dim, alpha: out.end === 'k3' ? 0.45 : 0.35, duration: 180 });
+      });
+    }
     this.tweens.add({
-      targets: p, t: 1, duration: PITCH.flight * 1000, ease: 'Quad.easeIn',
+      targets: p, t: 1, duration: PITCH.flight * 1000 * (isK ? 2.4 : 1), ease: isK ? slowEase : 'Quad.easeIn',
       onUpdate: () => {
         const t = p.t;
         b.x = from.x + (target.x - from.x) * t;
@@ -293,18 +304,23 @@ export default class Stadium extends Phaser.Scene {
     const power = Phaser.Math.Clamp((kmh - 80) / 80, 0.6, 1.2);
 
     // ---- the "pop": everything lands on the same frame ----
-    const juice = isStrike ? 1 : 0.6;                   // strikes hit harder than balls
-    this.hitStop(isStrike ? 70 : 45);
-    this.cameras.main.shake(90, 0.006 * power * juice);
-    this.zoomPunch(0.03 * juice);
-    this.flashRect.setAlpha(0.22 * juice);
-    this.tweens.add({ targets: this.flashRect, alpha: 0, duration: 110 });
+    const isK = out && (out.end === 'k' || out.end === 'k3'), k3 = out && out.end === 'k3';
+    const juice = isK ? (k3 ? 2.2 : 1.8) : isStrike ? 1 : 0.6;   // strikeouts hit hardest, balls softest
+    this.dim.setAlpha(0);
+    this.hitStop(isK ? (k3 ? 200 : 160) : isStrike ? 70 : 45);
+    this.cameras.main.shake(isK ? 260 : 90, isK ? 0.012 * juice : 0.006 * power * juice);
+    this.zoomPunch(isK ? 0.09 : 0.03 * juice);
+    this.flashRect.setAlpha(isK ? 0.5 : 0.22 * juice);
+    this.tweens.add({ targets: this.flashRect, alpha: 0, duration: isK ? 220 : 110 });
     this.mittRecoil(target, juice);
     this.impactRing(target.x, target.y, isStrike ? 0xffe14a : 0xffffff, juice);
+    if (isK) this.time.delayedCall(90, () => this.impactRing(target.x, target.y, 0xffffff, juice * 1.3));
     this.starBurst(target.x, target.y, juice);
-    this.sparks.explode(isStrike ? 16 : 8, target.x, target.y);
-    this.dust.explode(6, target.x, target.y + 2);
-    sfx('mitt', power * (0.85 + 0.15 * juice));
+    if (isK) this.speedLines(target.x, target.y, juice);
+    this.sparks.explode(isK ? 34 : isStrike ? 16 : 8, target.x, target.y);
+    this.dust.explode(isK ? 16 : 6, target.x, target.y + 2);
+    sfx('mitt', isK ? 1.5 : power * (0.85 + 0.15 * juice));
+    if (isK) sfx('boom', k3 ? 1 : 0.8);
     sfx(isStrike ? 'strike' : 'ball');
 
     // gold
@@ -597,8 +613,19 @@ export default class Stadium extends Phaser.Scene {
 
   mittRecoil(target, juice) {           // glove gets shoved back, squashes, springs back
     const m = this.mitt;
-    m.setPosition(target.x, target.y + 3 * juice).setScale(1 + 0.18 * juice, 1 - 0.14 * juice);
-    this.tweens.add({ targets: m, y: target.y, scaleX: 1, scaleY: 1, duration: 160, ease: 'Back.easeOut' });
+    const sq = Math.min(0.32, 0.14 * juice);
+    m.setPosition(target.x, target.y + 3 * juice).setScale(1 + sq * 1.3, 1 - sq);
+    this.tweens.add({ targets: m, y: target.y, scaleX: 1, scaleY: 1, duration: 160 + 60 * Math.max(0, juice - 1), ease: 'Back.easeOut' });
+  }
+
+  speedLines(x, y, juice) {             // white streaks rushing into the mitt
+    const g = this.add.graphics();
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * Math.PI * 2 + Math.random() * 0.2, r0 = 40 + Math.random() * 30, r1 = 16 + Math.random() * 6;
+      g.lineStyle(i % 2 ? 1 : 2, 0xffffff, 0.9)
+        .lineBetween(x + Math.cos(a) * r0 * 1.6, y + Math.sin(a) * r0, x + Math.cos(a) * r1 * 1.6, y + Math.sin(a) * r1);
+    }
+    this.tweens.add({ targets: g, alpha: 0, duration: 260 * juice / 1.8, onComplete: () => g.destroy() });
   }
 
   starBurst(x, y, juice) {              // 2-frame white cross flash right on the ball
