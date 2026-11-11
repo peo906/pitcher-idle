@@ -196,3 +196,7 @@ html, body { margin: 0; height: 100%; background: #0b0d12; color: #f2f2f2; font-
 #bug-mood.up { color: #7fe08a; }
 .bug.blink { animation: bugblink .25s step-end 4; }
 @keyframes bugblink { 50% { filter: brightness(1.8); } }
+
+/* bar labels: center vertically instead of relying on line-height (fixes clipped text) */
+#promo .bar, #matchbar .bar { display: flex; align-items: center; justify-content: center; height: 1.45em; }
+#promo .bar span, #matchbar .bar span { line-height: 1; padding-top: 1px; }
