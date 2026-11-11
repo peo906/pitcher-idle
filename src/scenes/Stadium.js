@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { W, H, MULT, PITCH, ANCHOR, speedKmh, interval, zoneChance, goldMult,
+import { W, H, MULT, PITCH, ANCHOR, MISS, speedKmh, interval, zoneChance, goldMult, missChance,
   STAGE_TIER, STAGE_INNING, STAGE_GAUGE, BULLPEN_STAGE, SEASON_GAMES } from '../config.js';
 import { stage, buffMult, examReady, passExam } from '../economy.js';
 import { Match } from '../match.js';
@@ -24,6 +24,7 @@ export default class Stadium extends Phaser.Scene {
     for (const k of ['pro', 'elementary'])
       this.load.spritesheet('pitcher_' + k, a + `pitcher_${k}_idle.png`, { frameWidth: 64, frameHeight: 64 });
     this.load.spritesheet('mitt', a + 'mitt.png', { frameWidth: 40, frameHeight: 32 });
+    this.load.image('emoteMiss', a + 'emote_miss.png');
     this.load.json('crowd', a + 'crowd.json');
     this.load.json('sprites', a + 'sprites.json');
   }
@@ -75,6 +76,7 @@ export default class Stadium extends Phaser.Scene {
     this.batter.setVisible(false);
 
     this.makeParticles();
+    this.emote = this.add.image(0, 0, 'emoteMiss').setVisible(false);
     this.dim = this.add.rectangle(0, 0, W, H, 0x000814, 1).setOrigin(0).setAlpha(0);
     this.children.moveBelow(this.dim, this.ball);           // dim the stadium, keep ball and mitt bright
     this.flashRect = this.add.rectangle(0, 0, W, H, 0xffffff, 1).setOrigin(0).setAlpha(0);
@@ -152,6 +154,55 @@ export default class Stadium extends Phaser.Scene {
     }
   }
 
+  // ---------------- 실투 / 폭투 / 강판 ----------------
+  missReaction() {                      // red "!" beside the face, head shake
+    const p = this.pitcher;
+    const hx = p.x + 14, hy = p.y - 54;
+    this.emote.setPosition(hx, hy).setVisible(true).setScale(0.3).setAlpha(1);
+    this.tweens.add({ targets: this.emote, scale: 1, duration: 140, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: this.emote, y: hy - 2, duration: 110, yoyo: true, repeat: 2, delay: 140 });
+    this.tweens.add({ targets: this.emote, alpha: 0, delay: 800, duration: 200, onComplete: () => this.emote.setVisible(false) });
+    const x0 = this.pitcher.x;
+    this.tweens.add({ targets: p, x: { from: x0 - 1, to: x0 + 1 }, duration: 60, yoyo: true, repeat: 3, onComplete: () => { p.x = x0; } });
+    sfx('oops');
+  }
+
+  wildPitch(target, out) {              // ball skips past the glove and rolls to the backstop
+    const b = this.ball, p = { t: 0 }, sx = target.x, sy = target.y;
+    const ex = sx + (sx < 240 ? -70 : 70), ey = H + 30;
+    this.tweens.add({ targets: p, t: 1, duration: 420, ease: 'Quad.easeIn',
+      onUpdate: () => { b.x = sx + (ex - sx) * p.t; b.y = sy + (ey - sy) * p.t; b.setScale(1.4 + 0.8 * p.t); },
+      onComplete: () => b.setVisible(false) });
+    this.dust.explode(10, target.x, target.y + 10);
+    this.payPitch(out.mult);
+    state.pitches++;
+    this.popText('WILD PITCH', '#ff8a7a', 150, 196, 2);
+    this.showBanner(['WILD', 'PITCH!'], [0xff8a7a, 0xffffff], 1300);
+    this.cheerFor('right', 1000);
+    sfx('cheer', 0.4);
+    this.time.delayedCall(300, () => { this.mitt.setFrame(0); this.tweens.add({ targets: this.mitt, x: ANCHOR.mittRest.x, y: ANCHOR.mittRest.y, duration: 200 }); });
+    this.drawBoard(); this.emit();
+    this.afterPA(out);                     // walk, or 강판 from a run that scored on the wild pitch
+    this.time.delayedCall(260, () => this.pitcher.play(this.breatheKey));
+  }
+
+  pullSequence(out) {                   // 강판: the pitcher hangs his head and walks off
+    const p = this.pitcher;
+    this.batter.setVisible(false);
+    this.tweens.add({ targets: this.dim, alpha: 0.35, duration: 300 });
+    this.showBanner(['PITCHER', 'CHANGE'], [0xff5a4a, 0xffffff], 2600);
+    this.popText('강판...', '#ff8a7a', W / 2, 140, 2);
+    this.cheerFor('right', 2000);
+    sfx('oops');
+    p.stop();
+    this.tweens.add({ targets: p, y: this.pitcherY + 3, duration: 300 });                       // head down
+    this.tweens.add({ targets: p, x: W + 50, delay: 800, duration: 1400, ease: 'Sine.easeIn' });  // walks off
+    this.time.delayedCall(2700, () => {
+      this.tweens.add({ targets: this.dim, alpha: 0, duration: 300 });
+      this.endGame(out.gameOver);
+    });
+  }
+
   // ---------------- result effects ----------------
   fxStrikeout(k3, target) {
     this.showBanner(['STRIKE', 'OUT!'], [0xffe14a, 0xffffff], k3 ? 1800 : 1400);
@@ -209,7 +260,9 @@ export default class Stadium extends Phaser.Scene {
 
   startGame() {
     const st = state.stage;
-    this.match = new Match({ innings: STAGE_INNING[st], tier: STAGE_TIER[st], bullpen: st === BULLPEN_STAGE, exam: examReady() });
+    this.match = new Match({ innings: STAGE_INNING[st], tier: STAGE_TIER[st], bullpen: st === BULLPEN_STAGE, exam: examReady(),
+      shrink: state.carryShrink || 0 });
+    state.carryShrink = 0;
     this.popText(this.match.exam ? '진급 심사 경기!' : 'PLAY BALL!', '#ffffff', W / 2, 140, 2);
     this.showBatter(true);
     this.drawBoard();
@@ -235,26 +288,44 @@ export default class Stadium extends Phaser.Scene {
     const T = interval(state.lv.tempo);
     const windup = Math.max(PITCH.minWindup, T - PITCH.flight - PITCH.react);
 
-    let isStrike, out = null;
-    if (this.match) { out = this.match.pitch(state.lv); isStrike = out.inZone; }
-    else isStrike = Math.random() < zoneChance(state.lv.control);
-    const target = this.pickTarget(isStrike);
+    let isStrike, out = null, miss = null;
+    if (this.match) { out = this.match.pitch(state.lv); isStrike = out.inZone; miss = out.miss; }
+    else {
+      miss = Math.random() < missChance(state.lv.control) ? (Math.random() < MISS.wideShare ? 'wide' : 'middle') : null;
+      isStrike = miss === 'middle' ? true : miss === 'wide' ? false : Math.random() < zoneChance(state.lv.control);
+    }
+    // target = where the ball really goes, call = where the catcher asked for it
+    const target = miss === 'middle' ? this.pickMiddle() : this.pickTarget(isStrike);
+    const call = miss ? this.pickCall(target) : target;
 
     this.mitt.setFrame(0);
-    this.tweens.add({ targets: this.mitt, x: target.x, y: target.y, duration: Math.min(220, windup * 800), ease: 'Sine.easeOut' });
+    this.tweens.add({ targets: this.mitt, x: call.x, y: call.y, duration: Math.min(220, windup * 800), ease: 'Sine.easeOut' });
     this.pitcher.stop();
     this.tweens.add({
       targets: this.pitcher, y: this.pitcherY + 2, duration: windup * 1000 * 0.8,
-      onComplete: () => { this.pitcher.y = this.pitcherY; this.release(target, isStrike, out); },
+      onComplete: () => { this.pitcher.y = this.pitcherY; this.release(target, isStrike, out, miss); },
     });
 
     // after a ball in play / end of game, give the play time to finish
     let wait = T;
     if (out && (out.call === 'inplay' || out.call === 'foul')) wait += out.call === 'foul' ? 0.5 : 1.3;
     if (out && out.end) wait += 0.5;
+    if (out && out.wild) wait += 0.8;
+    if (out && out.gameOver && out.gameOver.pulled) wait += 2.6;
     if (out && out.gameOver) wait += 2.6;
     else if (out && out.inningOver) wait += 2.2;           // inning break
     this.time.delayedCall(wait * 1000, () => this.pitch());
+  }
+
+  pickMiddle() {                        // 몰린 공: right over the heart of the plate
+    const z = ANCHOR.zone, cx = (z.x0 + z.x1) / 2, cy = (z.y0 + z.y1) / 2, r = Phaser.Math.Between;
+    return { x: cx + r(-4, 4), y: cy + r(-4, 4) };
+  }
+  pickCall(target) {                    // the catcher wanted the opposite corner
+    const z = ANCHOR.zone, r = Phaser.Math.Between, cx = (z.x0 + z.x1) / 2, cy = (z.y0 + z.y1) / 2;
+    const left = target.x < cx || (Math.abs(target.x - cx) < 6 && Math.random() < 0.5);
+    const up = target.y < cy || (Math.abs(target.y - cy) < 6 && Math.random() < 0.5);
+    return { x: left ? r(z.x1 - 12, z.x1 - 5) : r(z.x0 + 5, z.x0 + 12), y: up ? r(z.y1 - 12, z.y1 - 5) : r(z.y0 + 5, z.y0 + 12) };
   }
 
   pickTarget(isStrike) {
@@ -267,8 +338,15 @@ export default class Stadium extends Phaser.Scene {
     return { x: r(z.x0, z.x1), y: r(z.y1 + 6, z.y1 + 16) };
   }
 
-  release(target, isStrike, out) {
+  release(target, isStrike, out, miss = null) {
     sfx('whoosh');
+    if (miss) {
+      this.time.delayedCall(40, () => this.missReaction());
+      // catcher lunges late; on a wild pitch he gets there a beat too slow
+      const reach = out && out.wild ? { x: target.x + (target.x < 240 ? 14 : -14), y: target.y - 6 } : target;
+      this.tweens.add({ targets: this.mitt, x: reach.x, y: reach.y, delay: PITCH.flight * 1000 * 0.45,
+        duration: PITCH.flight * 1000 * 0.55, ease: 'Quad.easeOut' });
+    }
     if (out && out.swing) this.time.delayedCall(PITCH.flight * 1000 * 0.55, () => this.swing());
     const from = ANCHOR.release;
     const b = this.ball.setVisible(true).setPosition(from.x, from.y).setScale(0.25);
@@ -291,7 +369,8 @@ export default class Stadium extends Phaser.Scene {
         b.setScale(0.25 + 1.15 * t);
       },
       onComplete: () => {
-        if (out && (out.call === 'foul' || out.call === 'inplay')) this.contact(target, out);
+        if (out && out.wild) this.wildPitch(target, out);
+        else if (out && (out.call === 'foul' || out.call === 'inplay')) this.contact(target, out);
         else this.caught(target, isStrike, out);
       },
     });
@@ -412,8 +491,9 @@ export default class Stadium extends Phaser.Scene {
 
   // end of an at-bat: new batter, inning / game over
   afterPA(out) {
-    if (!out.end) return;
+    if (!out.end && !out.gameOver) return;
     this.emit();
+    if (out.gameOver && out.gameOver.pulled) { this.pullSequence(out); return; }
     if (out.gameOver) { this.time.delayedCall(500, () => this.endGame(out.gameOver)); return; }
     if (out.inningOver) { this.inningBreak(out); return; }
     this.time.delayedCall(350, () => this.showBatter(false));
@@ -470,9 +550,11 @@ export default class Stadium extends Phaser.Scene {
     this.batter.setVisible(false);
     const pro = STAGE_GAUGE[state.stage] === 0;
     if (pro) state.seasonGame = (state.seasonGame + 1) % SEASON_GAMES;
-    if (m.exam && res.win) this.time.delayedCall(900, () => passExam());
+    if (m.exam && res.win && !res.pulled) this.time.delayedCall(900, () => passExam());
+    if (res.pulled) state.carryShrink = Math.min(15, Math.floor(m.shrink / 2) + 3);   // shaken going into the next game
     save();
     this.time.delayedCall(2200, () => {
+      this.pitcher.setAlpha(1); this.applyPitcherArt();       // back on the mound after a 강판
       if (STAGE_GAUGE[state.stage] === 0) this.startGame();   // pro: next game right away
       this.drawBoard(); this.emit();
     });

@@ -139,9 +139,11 @@ async function boot() {
   window.addEventListener('game-over', e => {
     const r = e.detail;
     const head = r.win ? '승리!' : r.draw ? '무승부' : '패배';
-    const exam = r.exam ? (r.win ? '<br><small>진급 심사 통과! 남은 20% 면제</small>' : '<br><small>진급 심사 실패, 다음 경기에 다시</small>') : '';
+    const passed = r.win && !r.pulled;
+    const exam = r.exam ? (passed ? '<br><small>진급 심사 통과! 남은 20% 면제</small>' : '<br><small>진급 심사 실패, 다음 경기에 다시</small>') : '';
+    const pulled = r.pulled ? '<br><small>강판 · 남은 이닝은 불펜이 던졌어요 · 보너스 없음 · 다음 경기 위축</small>' : '';
     const bonus = r.label ? `<br>${r.label} 보너스 +${Math.round(r.bonus * 100)}% <b>+${fmt(r.bonusGold)}</b>` : '';
-    $('toast').innerHTML = `<b>${head}</b> <small>${r.score[0]} : ${r.score[1]}</small>${bonus}${exam}`;
+    $('toast').innerHTML = `<b>${head}</b> <small>${r.score[0]} : ${r.score[1]}</small>${pulled}${bonus}${exam}`;
     $('toast').hidden = false;
     clearTimeout(toastTimer); toastTimer = setTimeout(() => { $('toast').hidden = true; }, 2600);
   });

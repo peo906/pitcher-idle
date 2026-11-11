@@ -51,7 +51,22 @@ export const JUDGE = {
 export const RESULT_MULT = { k3: 2.0, k: 1.5, out: 1.3 };   // on the pitch that ends the at-bat
 export const MOOD = { hit: 3, hr: 5, cap: 15, outHeal: 3, confZone: 0.03, confHit: 0.02, confStreak: 3 };
 export const GAME_BONUS = { perfect: 2.0, noHit: 1.0, shutout: 0.5, cgWin: 0.2, bullpen: 0.2 };
-export const TEAM_RUN = { chances: 2, p: 0.22 };            // our offense per inning
+export const TEAM_RUN = { chances: 2, p: 0.22 };
+export const BULLPEN_RUN = { chances: 2, p: 0.22 };       // opponent offense vs our bullpen after 강판
+
+// 실투 (기획: 빠지는 공 75% / 몰린 공 25%)
+export const MISS = {
+  base: 0.20, perLv: 0.0053, min: 0.04,       // 제구 Lv0 20% -> Lv30 ~4%
+  moodPer: 0.5,                               // 위축 1%p당 실투 +0.5%p
+  wideShare: 0.75,                            // the rest is a "몰린 공"
+  wildPitch: 0.12,                            // a wide miss with runners on gets past the catcher
+  middle: { swing: 0.95, contactBonus: 0.10, hitMult: 1.6, hrMult: 2.0 },
+};
+export const missChance = (controlLv, shrink = 0) =>
+  Math.max(MISS.min, MISS.base - MISS.perLv * controlLv) + (shrink * MISS.moodPer) / 100;
+
+// 강판: game runs by innings, or a big inning
+export const PULL = { byInnings: { 2: 2, 3: 3, 5: 4, 6: 4, 7: 4, 9: 5 }, inningRuns: { short: 3, long: 4 } };   // big inning: 3 runs in games of 3 innings or less, else 4            // our offense per inning
 export const EXAM = { at: 0.8 };                            // 진급 심사: 80% saved -> win waives 20%
 
 export const PROMO_BUFF = { mult: 1.5, ms: 10 * 60 * 1000 };   // 진급 직후 10분 골드 ×1.5

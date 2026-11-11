@@ -1,13 +1,15 @@
 // One game: count, outs, innings, bases, runs, mood. Pure rules — the scene only draws what this returns.
-import { TIERS, JUDGE, RESULT_MULT, MOOD, GAME_BONUS, TEAM_RUN, zoneChance } from './config.js';
+import { TIERS, JUDGE, RESULT_MULT, MOOD, GAME_BONUS, TEAM_RUN, BULLPEN_RUN, MISS, PULL, zoneChance, missChance } from './config.js';
 
 export class Match {
-  constructor({ innings, tier, bullpen = false, exam = false }) {
+  constructor({ innings, tier, bullpen = false, exam = false, shrink = 0 }) {
     Object.assign(this, { innings, tier: TIERS[tier], bullpen, exam });
+    this.inningRuns = 0; this.pulled = false; this.pullLimit = PULL.byInnings[innings] || 5;
+    this.bigInning = innings <= 3 ? PULL.inningRuns.short : PULL.inningRuns.long;
     this.inning = 1; this.outs = 0; this.balls = 0; this.strikes = 0; this.pitchesInPA = 0;
     this.bases = [0, 0, 0]; this.runs = 0; this.teamRuns = 0;
     this.hits = 0; this.walks = 0; this.ks = 0; this.batters = 0;
-    this.shrink = 0;        // 위축 %p added to hit chance
+    this.shrink = shrink;   // 위축 %p added to hit chance (can carry over after 강판)
     this.outStreak = 0;     // consecutive outs -> 자신감
     this.gold = 0;          // gold earned during this game (bonus is a % of it)
     this.over = false;
@@ -19,25 +21,39 @@ export class Match {
   // Decide one pitch. lv = pitcher levels. Returns everything the scene needs to draw it.
   pitch(lv) {
     const J = JUDGE, T = this.tier;
+    // 실투 first: 'wide' slips out of the zone, 'middle' hangs right over the plate
+    const miss = Math.random() < missChance(lv.control, this.shrink)
+      ? (Math.random() < MISS.wideShare ? 'wide' : 'middle') : null;
     const zone = Math.min(J.maxZone, zoneChance(lv.control) + (this.confident ? MOOD.confZone : 0));
-    const inZone = Math.random() < zone;
-    const swing = Math.random() < (inZone ? J.swingIn : J.swingOut);
-    const out = { inZone, swing, call: null, end: null, mult: 1 };
+    const inZone = miss === 'middle' ? true : miss === 'wide' ? false : Math.random() < zone;
+    const swing = Math.random() < (miss === 'middle' ? MISS.middle.swing : inZone ? J.swingIn : J.swingOut);
+    const out = { inZone, swing, miss, call: null, end: null, mult: 1 };
     this.pitchesInPA++;
+
+    // a wide miss with runners on can get past the catcher: every runner moves up
+    if (miss === 'wide' && !swing && this.bases.some(Boolean) && Math.random() < MISS.wildPitch) {
+      out.wild = true; const before = this.runs;
+      this.advanceRunnersOnly(1);
+      this.inningRuns += this.runs - before;
+      if (this.checkPull(out)) { out.call = 'ball'; out.count = { b: this.balls, s: this.strikes, o: this.outs }; return out; }
+    }
 
     if (!swing) {
       if (inZone) { this.strikes++; out.call = 'strike'; out.mult = 1.1; }
       else { this.balls++; out.call = 'ball'; }
     } else {
-      const contact = Math.max(J.minContact, T.contact - J.endPerLv * lv.end);
+      const contact = miss === 'middle' ? Math.min(0.97, T.contact + MISS.middle.contactBonus)
+        : Math.max(J.minContact, T.contact - J.endPerLv * lv.end);
       if (Math.random() >= contact) { this.strikes++; out.call = 'swingMiss'; out.mult = 1.1; }
       else if (Math.random() < J.foul) {
         out.call = 'foul'; out.mult = 1.1;
         if (this.strikes < 2) this.strikes++;
       } else {
-        const hitP = Math.max(J.minHit, T.hit - J.stuffHitPerLv * lv.stuff + this.shrink / 100 - (this.confident ? MOOD.confHit : 0));
+        let hitP = Math.max(J.minHit, T.hit - J.stuffHitPerLv * lv.stuff + this.shrink / 100 - (this.confident ? MOOD.confHit : 0));
+        if (miss === 'middle') hitP = Math.min(0.75, hitP * MISS.middle.hitMult);
         if (Math.random() < hitP) {
-          const hrP = Math.max(J.minHr, T.hr - J.stuffHrPerLv * lv.stuff);
+          let hrP = Math.max(J.minHr, T.hr - J.stuffHrPerLv * lv.stuff);
+          if (miss === 'middle') hrP = Math.min(0.6, hrP * MISS.middle.hrMult);
           const r = Math.random();
           out.call = 'inplay';
           out.end = r < hrP ? 'hr' : (r < hrP + (1 - hrP) * J.single ? 'single'
@@ -77,19 +93,41 @@ export class Match {
     }
     this.balls = 0; this.strikes = 0; this.pitchesInPA = 0;
     out.runsNow = this.runs;
+    if (this.checkPull(out)) return;
     if (this.outs >= 3) this.endInning(out);
     this.lefty = Math.random() < 0.3;
+  }
+
+  // 강판: too many runs in the game or in one inning. Bullpen finishes the game off-screen.
+  checkPull(out) {
+    if (this.pulled || this.over) return false;
+    if (this.runs < this.pullLimit && this.inningRuns < this.bigInning) return false;
+    this.pulled = true; out.pulled = { runs: this.runs, inningRuns: this.inningRuns, inning: this.inning };
+    const roll = c => { let r = 0; for (let i = 0; i < c.chances; i++) if (Math.random() < c.p) r++; return r; };
+    if (this.outs < 3) this.runs += Math.random() < (3 - this.outs) / 3 ? roll(BULLPEN_RUN) : 0;   // rest of this inning
+    for (let i = this.inning; i <= this.innings; i++) {
+      this.teamRuns += roll(TEAM_RUN);
+      if (i > this.inning) this.runs += roll(BULLPEN_RUN);
+    }
+    this.inning = this.innings; this.outs = 0; this.bases = [0, 0, 0];
+    this.over = true; out.gameOver = this.result();
+    return true;
+  }
+
+  advanceRunnersOnly(n) {                         // wild pitch: runners move, batter stays
+    const b = this.bases;
+    for (let i = 2; i >= 0; i--) if (b[i]) { if (i + n >= 3) this.runs++; else b[i + n] = 1; b[i] = 0; }
   }
 
   advance(n) {                                    // hits: everyone moves n bases, batter included
     const b = this.bases; let scored = 0;
     for (let i = 2; i >= 0; i--) if (b[i]) { if (i + n >= 3) scored++; else b[i + n] = 1; b[i] = 0; }
     if (n >= 4) scored++; else b[n - 1] = 1;
-    this.runs += scored;
+    this.runs += scored; this.inningRuns += scored;
   }
   walkAdvance() {                                 // walks only push forced runners
     const b = this.bases;
-    if (b[0]) { if (b[1]) { if (b[2]) this.runs++; b[2] = 1; } b[1] = 1; }
+    if (b[0]) { if (b[1]) { if (b[2]) { this.runs++; this.inningRuns++; } b[2] = 1; } b[1] = 1; }
     b[0] = 1;
   }
 
@@ -97,7 +135,7 @@ export class Match {
     let scored = 0;
     for (let i = 0; i < TEAM_RUN.chances; i++) if (Math.random() < TEAM_RUN.p) scored++;
     this.teamRuns += scored; out.teamScored = scored;
-    this.outs = 0; this.bases = [0, 0, 0]; this.shrink = Math.floor(this.shrink / 2);
+    this.outs = 0; this.bases = [0, 0, 0]; this.shrink = Math.floor(this.shrink / 2); this.inningRuns = 0;
     out.inningOver = this.inning;
     if (this.inning >= this.innings) { this.over = true; out.gameOver = this.result(); }
     else this.inning++;
@@ -107,6 +145,7 @@ export class Match {
   result() {
     const win = this.teamRuns > this.runs, draw = this.teamRuns === this.runs;
     let bonus = 0, label = null;
+    if (this.pulled) return { win, draw, bonus: 0, label: null, bonusGold: 0, score: [this.teamRuns, this.runs], pulled: true };
     if (this.bullpen) { if (this.runs === 0) { bonus = GAME_BONUS.bullpen; label = '무실점 투구'; } }
     else if (this.hits + this.walks === 0) { bonus = GAME_BONUS.perfect; label = '퍼펙트게임'; }
     else if (this.hits === 0) { bonus = GAME_BONUS.noHit; label = '노히트노런'; }

@@ -24,6 +24,7 @@ export const state = {
   autoGame: true,        // start a game as soon as the gauge is full
   seasonGame: 0,         // pro: games played this season
   record: { w: 0, l: 0, d: 0 },
+  carryShrink: 0,        // 위축 carried into the next game after a 강판
 };
 const DEFAULT_LV = { speed: 0, tempo: 0, control: 0, stuff: 0, end: 0 };
 
