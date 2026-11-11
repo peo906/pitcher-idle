@@ -61,13 +61,24 @@
     <aside id="panel">
       <button id="panel-toggle" title="능력치 패널 접기/펴기">◀</button>
       <div class="panel-body">
-        <div class="panel-head">
-          <span>능력치</span>
-          <div class="bulk" id="bulk">
-            <button data-n="1">x1</button><button data-n="10">x10</button><button data-n="max">MAX</button>
-          </div>
+        <div class="tabs" id="tabs">
+          <button data-tab="stats" class="on">능력치</button><button data-tab="pitches">구종 <i id="pt-new" hidden></i></button>
         </div>
-        <div id="upgrades"></div>
+        <div id="tab-stats">
+          <div class="panel-head">
+            <span></span>
+            <div class="bulk" id="bulk">
+              <button data-n="1">x1</button><button data-n="10">x10</button><button data-n="max">MAX</button>
+            </div>
+          </div>
+          <div id="upgrades"></div>
+        </div>
+        <div id="tab-pitches" hidden>
+          <div class="pt-slots"><span>장착</span><b id="pt-slots"></b></div>
+          <div class="pt-equipped" id="pt-equipped"></div>
+          <div class="pt-meta" id="pt-meta"></div>
+          <div id="pt-list"></div>
+        </div>
       </div>
     </aside>
 
@@ -113,6 +124,8 @@
           <button data-act="lose">경기 패배로 끝내기</button>
           <button data-act="maxlv">능력치 전부 +10</button>
           <button data-act="resetlv">능력치 초기화</button>
+          <button data-act="pitchall">구종 전부 해금</button>
+          <button data-act="pitchreset">구종 초기화</button>
         </div>
         <p class="hint">관리자 모드는 주소 끝에 ?admin 을 붙였을 때만 보여요. 관리자 기능으로 바꾼 내용도 저장돼요.</p>
         <div class="row end"><button id="admin-close" class="primary">닫기</button></div>

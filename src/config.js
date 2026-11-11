@@ -107,3 +107,39 @@ export const ANCHOR = {
   mittRest: { x: 240, y: 222 },
   scoreboard: { x0: 193, y0: 48, x1: 286, y1: 86 },   // inner screen, measured from bg_pro.png
 };
+
+// ---------------- 구종 (기획서 '구종과 장착') ----------------
+// Effects apply only to the pitch that is thrown (%p): zone = more strikes, whiff = batter misses more,
+// hit / hr = fewer hits / home runs (negative). speed = share of fastball velocity shown on the gun.
+export const PITCHES = [
+  { id: 'fastball',     name: '직구',          stage: 0,  speed: 1.00, fx: {} },
+  { id: 'curve',        name: '커브',          stage: 2,  speed: 0.75, fx: { whiff: 9, zone: -6 } },
+  { id: 'changeup',     name: '체인지업',      stage: 4,  speed: 0.82, fx: { hit: -5, whiff: 2 } },
+  { id: 'slider',       name: '슬라이더',      stage: 5,  speed: 0.88, fx: { whiff: 6, hit: -3, zone: -3 } },
+  { id: 'twoseam',      name: '투심',          stage: 6,  speed: 0.97, fx: { hit: -2, hr: -5 } },
+  { id: 'cutter',       name: '커터',          stage: 7,  speed: 0.93, fx: { hr: -5, zone: 2 } },
+  { id: 'sinker',       name: '싱커',          stage: 8,  speed: 0.95, fx: { hit: -5, whiff: -4 } },
+  { id: 'splitter',     name: '스플리터',      stage: 9,  speed: 0.88, fx: { whiff: 9, zone: -6 } },
+  { id: 'knucklecurve', name: '너클 커브',     stage: 10, speed: 0.78, fx: { whiff: 12, zone: -9 } },
+  { id: 'fork',         name: '포크',          stage: 11, speed: 0.85, fx: { whiff: 15, hit: -3, zone: -9 } },
+  { id: 'sweeper',      name: '스위퍼',        stage: 12, speed: 0.86, fx: { whiff: 12, hit: -3 } },
+  { id: 'circlechange', name: '서클 체인지업', stage: 13, speed: 0.82, fx: { hit: -8, zone: -3 } },
+  { id: 'knuckleball',  name: '너클볼',        stage: 15, speed: 0.70, fx: { whiff: 18, zone: -18 } },
+  { id: 'gyro',         name: '자이로볼',      stage: 16, speed: 1.00, fx: { whiff: 9, hr: -3 } },
+];
+export const PITCH_BY_ID = Object.fromEntries(PITCHES.map(p => [p.id, p]));
+export const PITCH_UNLOCK_SHARE = 0.3;                      // unlock cost = 30% of that stage's promotion cost
+export const PITCH_MIX = { fastball: 0.4, finisherBoost: 2 }; // 2 strikes: pitches with whiff >= 9 are twice as likely
+export const slotsFor = stage => (stage < 2 ? 0 : stage < 6 ? 2 : stage < 9 ? 3 : 4);
+
+// 조합 보너스: always on while the set is equipped
+export const COMBOS = [
+  { id: 'drop',   name: '낙차 3종',  desc: '커브·너클 커브·스플리터·포크 중 3개', fx: { whiff: 2 },
+    test: eq => ['curve', 'knucklecurve', 'splitter', 'fork'].filter(x => eq.includes(x)).length >= 3 },
+  { id: 'ground', name: '땅볼 머신', desc: '투심·싱커·커터', fx: { hit: -1 },
+    test: eq => ['twoseam', 'sinker', 'cutter'].every(x => eq.includes(x)) },
+  { id: 'tempo',  name: '완급 조절', desc: '체인지업류 + 커터·슬라이더·스위퍼 중 1개', fx: { hit: -1, whiff: 1 },
+    test: eq => eq.some(x => x === 'changeup' || x === 'circlechange') && eq.some(x => ['cutter', 'slider', 'sweeper'].includes(x)) },
+  { id: 'power',  name: '정통파',    desc: '슬롯 3칸 이상에서 변화구 2개 이하', fx: { zone: 3, hr: -1 },
+    test: (eq, slots) => slots >= 3 && eq.length <= 2 },
+];

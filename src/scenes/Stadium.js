@@ -3,6 +3,8 @@ import { W, H, MULT, PITCH, ANCHOR, MISS, speedKmh, interval, zoneChance, goldMu
   STAGE_TIER, STAGE_INNING, STAGE_GAUGE, BULLPEN_STAGE, SEASON_GAMES } from '../config.js';
 import { stage, buffMult, examReady, passExam } from '../economy.js';
 import { Match } from '../match.js';
+import { pickPitch, mods as pitchMods, kmhFor } from '../arsenal.js';
+import { PITCH_BY_ID } from '../config.js';
 import { drawPixelText, textWidth } from '../pixelfont.js';
 import { save } from '../state.js';
 import { state, addGold } from '../state.js';
@@ -356,10 +358,14 @@ export default class Stadium extends Phaser.Scene {
 
     let isStrike, out = null, miss = null;
     const lefty = this.match && this.match.lefty;          // the batter at the plate now (pitch() may roll the next one)
-    if (this.match) { out = this.match.pitch(state.lv, this.forceNext); this.forceNext = null; isStrike = out.inZone; miss = out.miss; }
+    // pitch type for this throw: its own effect only applies to this pitch
+    const ptId = this.forcePitch || pickPitch(this.match ? this.match.strikes : 0); this.forcePitch = null;
+    const pt = pitchMods(ptId);
+    this.curPitch = ptId; this.curKmh = kmhFor(ptId) + Phaser.Math.Between(-2, 2);
+    if (this.match) { out = this.match.pitch(state.lv, this.forceNext, pt); this.forceNext = null; isStrike = out.inZone; miss = out.miss; }
     else {
       miss = Math.random() < missChance(state.lv.control) ? (Math.random() < MISS.wideShare ? 'wide' : 'middle') : null;
-      isStrike = miss === 'middle' ? true : miss === 'wide' ? false : Math.random() < zoneChance(state.lv.control);
+      isStrike = miss === 'middle' ? true : miss === 'wide' ? false : Math.random() < Math.max(0.15, Math.min(0.85, zoneChance(state.lv.control) + pt.zone));
     }
     // target = where the ball really goes, call = where the catcher asked for it
     const target = out && out.end === 'hbp' ? this.batterBody(lefty)
@@ -452,7 +458,7 @@ export default class Stadium extends Phaser.Scene {
     this.time.delayedCall(450, () => { if (!(out && out.end)) this.playing = false; });
     this.ball.setVisible(false);
     this.mitt.setFrame(1);
-    const kmh = speedKmh(state.lv.speed) + Phaser.Math.Between(-2, 2);
+    const kmh = this.curKmh;
     const power = Phaser.Math.Clamp((kmh - 80) / 80, 0.6, 1.2);
 
     // ---- the "pop": everything lands on the same frame ----
@@ -494,6 +500,8 @@ export default class Stadium extends Phaser.Scene {
       this.popText(isStrike ? 'STRIKE!' : 'BALL', isStrike ? '#ffe14a' : '#d8dde8', 150, 196, 2);
       this.practicePitchDone();
     }
+    this.lastPitch = this.curPitch;
+    if (this.speedLabel) this.speedLabel.setText(PITCH_BY_ID[this.curPitch].name);
     this.speedNum.setText(String(kmh));
     this.layoutSpeed();
     this.drawBoard(); this.emit();
@@ -518,8 +526,9 @@ export default class Stadium extends Phaser.Scene {
   // a batted ball: foul back over the catcher, or into the field
   contact(target, out) {
     this.ball.setVisible(true);
-    const kmh = speedKmh(state.lv.speed) + Phaser.Math.Between(-2, 2);
-    this.lastKmh = kmh; this.speedNum.setText(String(kmh)); this.layoutSpeed();
+    const kmh = this.curKmh;
+    this.lastKmh = kmh; this.lastPitch = this.curPitch; this.speedNum.setText(String(kmh)); this.layoutSpeed();
+    if (this.speedLabel) this.speedLabel.setText(PITCH_BY_ID[this.curPitch].name);
     this.cameras.main.shake(60, 0.004);
     sfx('bat');
     const gold = this.payPitch(out.mult);
@@ -647,7 +656,7 @@ export default class Stadium extends Phaser.Scene {
     if (this.speedLabel) this.speedLabel.setVisible(!inGame);
     if (!inGame) { this.hideBoardLabels(); return; }
     this.boardTop.setText(`${m.inning}회   ${m.teamRuns} : ${m.runs}`);
-    this.boardSpeed.setText(this.lastKmh ? `${this.lastKmh}km/h` : '');
+    this.boardSpeed.setText(this.lastKmh ? `${PITCH_BY_ID[this.lastPitch || 'fastball'].name} ${this.lastKmh}km/h` : '');
     const row = (y, n, lit, color, label) => {
       this.boardLabels = this.boardLabels || {};
       const x0 = sb.x0 + 8;
@@ -732,6 +741,7 @@ export default class Stadium extends Phaser.Scene {
     const t = this.nextPitch;
     if (t && !this.inBreak && !this.playing && t.getRemaining() > 400) { t.remove(false); this.nextPitch = this.time.delayedCall(300, () => this.pitch()); }
   }
+  adminPitch(id) { this.forcePitch = id; }
   adminMood(kind) {
     const m = this.match; if (!m) return;
     if (kind === 'shrink') { m.shrink = 15; m.outStreak = 0; } else { m.shrink = 0; m.outStreak = 3; }

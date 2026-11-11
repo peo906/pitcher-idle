@@ -7,6 +7,8 @@ import { fmt } from './format.js';
 import { setSound, unlock, sfx } from './sound.js';
 import { UPGRADES, STAGES } from './config.js';
 import { FORCE } from './match.js';
+import { PITCHES, STAGES as STAGE_LIST } from './config.js';
+import { slots, unlocked, equipped, unlockCost, canUnlock, unlock as unlockPitch, toggleEquip, activeCombos, fxText, title } from './arsenal.js';
 import { stage, nextStage, quote, buy, atCap, effectText, canPromote, promote, buffActive } from './economy.js';
 
 const $ = id => document.getElementById(id);
@@ -38,10 +40,12 @@ async function boot() {
   const refresh = () => {
     $('gold').textContent = fmt(state.gold);
     $('rate').textContent = `+${fmt(ratePerSec())}/초`;
-    $('player').textContent = state.name ? `투수 ${state.name}` : '';
+    const t = title();
+    $('player').textContent = state.name ? `투수 ${state.name}${t ? ' · ' + t : ''}` : '';
     $('btn-sound').textContent = state.sound ? '소리 ON' : '소리 OFF';
     refreshStage();
     refreshPanel();
+    refreshPitches();
   };
 
   // ---- promotion (top center) ----
@@ -98,6 +102,62 @@ async function boot() {
     $('panel-toggle').textContent = closed ? '◀' : '▶';
   };
   $('panel-toggle').textContent = '▶';
+
+  // ---- panel tabs ----
+  for (const b of $('tabs').children) b.onclick = () => {
+    for (const x of $('tabs').children) x.classList.toggle('on', x === b);
+    $('tab-stats').hidden = b.dataset.tab !== 'stats';
+    $('tab-pitches').hidden = b.dataset.tab !== 'pitches';
+    if (b.dataset.tab === 'pitches') state.seenPitchTab = true;
+    refresh();
+  };
+
+  // ---- 구종 tab ----
+  const ptRows = {};
+  for (const p of PITCHES) {
+    const el = document.createElement('div');
+    el.className = 'pt';
+    el.innerHTML = `<div class="name">${p.name}</div><button></button><div class="eff"></div>`;
+    el.querySelector('button').onclick = () => {
+      if (!unlocked(p.id)) { if (unlockPitch(p.id)) { sfx('buy'); toastMsg(`<b>${p.name}</b> 해금!`); } }
+      else if (toggleEquip(p.id)) sfx('buy');
+      else toastMsg('장착 슬롯이 가득 찼어요. 다른 구종을 먼저 해제하세요.');
+      refresh();
+    };
+    $('pt-list').appendChild(el);
+    ptRows[p.id] = el;
+  }
+  const refreshPitches = () => {
+    const eq = equipped(), n = slots();
+    $('pt-slots').textContent = n ? `${eq.length} / ${n}` : '초등 3학년부터';
+    $('pt-equipped').innerHTML = ['<span class="chip base">직구</span>',
+      ...eq.map(id => `<span class="chip">${PITCHES.find(p => p.id === id).name}</span>`),
+      ...Array.from({ length: Math.max(0, n - eq.length) }, () => '<span class="chip empty">빈 슬롯</span>')].join('');
+    const combos = activeCombos(), t = title();
+    $('pt-meta').innerHTML = (t ? `<div>투수 유형 <b>${t}</b></div>` : '') +
+      (combos.length ? combos.map(c => `<div class="combo">${c.name} <i>${fxText(c.fx)}</i></div>`).join('') : '<div class="hint">조합 보너스 없음</div>');
+    let newOnes = 0;
+    for (const p of PITCHES) {
+      const el = ptRows[p.id], btn = el.querySelector('button'), own = unlocked(p.id), on = eq.includes(p.id);
+      el.className = 'pt' + (on || p.id === 'fastball' ? ' on' : '') + (state.stage < p.stage ? ' locked' : '');
+      el.querySelector('.eff').textContent = state.stage < p.stage ? `${STAGE_LIST[p.stage].name} 해금` : fxText(p.fx);
+      if (p.id === 'fastball') { btn.disabled = true; btn.innerHTML = '기본'; continue; }
+      if (state.stage < p.stage) { btn.disabled = true; btn.innerHTML = '잠김'; continue; }
+      if (!own) {
+        const ok = canUnlock(p.id); if (ok) newOnes++;
+        btn.disabled = !ok; btn.innerHTML = `${fmt(unlockCost(p.id))}<small>해금</small>`;
+        continue;
+      }
+      btn.disabled = !on && eq.length >= n;
+      btn.innerHTML = on ? '해제' : '장착';
+      btn.classList.toggle('off', on);
+    }
+    $('pt-new').hidden = !newOnes; $('pt-new').textContent = newOnes;
+  };
+  const toastMsg = html => {
+    $('toast').innerHTML = html; $('toast').hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { $('toast').hidden = true; }, 1600);
+  };
 
   // ---- practice / game bar ----
   let info = { mode: 'practice', gauge: state.gauge, max: 30 };
@@ -231,6 +291,8 @@ async function boot() {
       if (act === 'lose') s.adminEndGame(false);
       if (act === 'maxlv') for (const k in state.lv) state.lv[k] = UPGRADES[k].cap === null ? state.lv[k] + 10 : Math.min(UPGRADES[k].cap, state.lv[k] + 10);
       if (act === 'resetlv') for (const k in state.lv) state.lv[k] = 0;
+      if (act === 'pitchall') { state.arsenal.unlocked = PITCHES.filter(p => p.id !== 'fastball').map(p => p.id); }
+      if (act === 'pitchreset') { state.arsenal = { unlocked: [], equipped: [] }; }
       if (act === 'shrink') s.adminMood('shrink');
       if (act === 'confident') s.adminMood('confident');
       save(); refresh(); window.dispatchEvent(new CustomEvent('gold-pop'));

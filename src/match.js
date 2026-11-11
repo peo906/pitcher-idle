@@ -20,17 +20,18 @@ export class Match {
 
   // Decide one pitch. lv = pitcher levels. Returns everything the scene needs to draw it.
   // Decide one pitch. lv = pitcher levels. force = admin test override (see FORCE below).
-  pitch(lv, force = null) {
+  pitch(lv, force = null, pt = null) {
     const J = JUDGE, T = this.tier;
+    const P = pt || { zone: 0, whiff: 0, hit: 0, hr: 0 };   // effect of the pitch type being thrown
     const F = force ? applyForce(this, force) : {};
     const R = (key, p) => (key in F ? F[key] : Math.random() < p);   // a roll, unless the admin pinned it
 
     // 실투 first: 'wide' slips out of the zone, 'middle' hangs right over the plate
     const miss = R('miss', missChance(lv.control, this.shrink)) ? (R('wide', MISS.wideShare) ? 'wide' : 'middle') : null;
-    const zone = Math.min(J.maxZone, zoneChance(lv.control) + (this.confident ? MOOD.confZone : 0));
+    const zone = Math.max(0.15, Math.min(J.maxZone, zoneChance(lv.control) + P.zone + (this.confident ? MOOD.confZone : 0)));
     const inZone = miss === 'middle' ? true : miss === 'wide' ? false : R('inZone', zone);
     const swing = R('swing', miss === 'middle' ? MISS.middle.swing : inZone ? J.swingIn : J.swingOut);
-    const out = { inZone, swing, miss, call: null, end: null, mult: 1 };
+    const out = { inZone, swing, miss, pitch: P.id || 'fastball', call: null, end: null, mult: 1 };
     this.pitchesInPA++;
 
     // a wide miss with runners on can get past the catcher: every runner moves up
@@ -56,17 +57,17 @@ export class Match {
       else { this.balls++; out.call = 'ball'; }
     } else {
       const contact = miss === 'middle' ? Math.min(0.97, T.contact + MISS.middle.contactBonus)
-        : Math.max(J.minContact, T.contact - J.endPerLv * lv.end);
+        : Math.max(J.minContact, T.contact - J.endPerLv * lv.end - P.whiff);
       if (!R('contact', contact)) { this.strikes++; out.call = 'swingMiss'; out.mult = 1.1; }
       else if (R('foul', J.foul)) {
         out.call = 'foul'; out.mult = 1.1;
         if (this.strikes < 2) this.strikes++;
       } else {
-        let hitP = Math.max(J.minHit, T.hit - J.stuffHitPerLv * lv.stuff + this.shrink / 100 - (this.confident ? MOOD.confHit : 0));
+        let hitP = Math.max(J.minHit, T.hit - J.stuffHitPerLv * lv.stuff + P.hit + this.shrink / 100 - (this.confident ? MOOD.confHit : 0));
         if (miss === 'middle') hitP = Math.min(0.75, hitP * MISS.middle.hitMult);
         out.call = 'inplay';
         if (R('hit', hitP)) {
-          let hrP = Math.max(J.minHr, T.hr - J.stuffHrPerLv * lv.stuff);
+          let hrP = Math.max(J.minHr, T.hr - J.stuffHrPerLv * lv.stuff + P.hr);
           if (miss === 'middle') hrP = Math.min(0.6, hrP * MISS.middle.hrMult);
           const r = Math.random();
           out.end = F.type || (r < hrP ? 'hr' : (r < hrP + (1 - hrP) * J.single ? 'single'

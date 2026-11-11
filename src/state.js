@@ -26,6 +26,7 @@ export const state = {
   record: { w: 0, l: 0, d: 0 },
   carryShrink: 0,        // 위축 carried into the next game after a 강판
   benchClears: 0,        // 이스터에그: times the benches cleared
+  arsenal: { unlocked: [], equipped: [] },   // 구종 (fastball is always available)
 };
 const DEFAULT_LV = { speed: 0, tempo: 0, control: 0, stuff: 0, end: 0 };
 
@@ -68,6 +69,7 @@ function apply(obj) {
   state.lv = { ...DEFAULT_LV, ...(obj.lv || {}) };     // older saves have no levels yet
   if (typeof state.stage !== 'number') state.stage = 0;
   state.record = { w: 0, l: 0, d: 0, ...(obj.record || {}) };
+  state.arsenal = { unlocked: [], equipped: [], ...(obj.arsenal || {}) };
 }
 
 // ---------- save codes ----------
