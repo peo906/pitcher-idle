@@ -155,7 +155,7 @@ export default class Stadium extends Phaser.Scene {
     state.pitches++; if (isStrike) state.strikes++;
 
     this.speedText.setText(`${kmh}km/h`);
-    this.popText(isStrike ? '스트라이크!' : '볼', isStrike ? '#ffe14a' : '#d8dde8', 150, 196, 2);
+    this.popText(isStrike ? 'STRIKE!' : 'BALL', isStrike ? '#ffe14a' : '#d8dde8', 150, 196, 2);
     this.popText(`+${fmt(gold)}`, '#ffd84a', target.x, target.y - 14, 1);
 
     // glove settles back
