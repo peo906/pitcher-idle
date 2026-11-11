@@ -22,6 +22,7 @@ async function boot() {
     scene: [Stadium],
   });
 
+  window.__game = game;            // handy for debugging from the console
   const scene = () => game.scene.getScene('Stadium');
   const startPitching = () => {
     const s = scene();

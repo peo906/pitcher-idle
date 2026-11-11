@@ -49,12 +49,28 @@ export default class Stadium extends Phaser.Scene {
 
     // scoreboard: speed gun
     const sb = ANCHOR.scoreboard, cx = (sb.x0 + sb.x1) / 2;
-    this.add.text(cx, sb.y0 + 6, '구속', { fontFamily: 'Galmuri11', fontSize: '11px', color: '#9fc4ff' }).setOrigin(0.5, 0);
-    this.speedText = this.add.text(cx, sb.y0 + 20, '-', { fontFamily: 'Galmuri11', fontSize: '11px', color: '#ffffff' })
-      .setOrigin(0.5, 0).setScale(2);
+    const font = { fontFamily: 'Galmuri11', fontSize: '11px' };
+    this.add.text(cx, sb.y0 + 3, '구속', { ...font, color: '#9fc4ff' }).setOrigin(0.5, 0);
+    // big number + small unit, kept inside the screen
+    this.speedNum = this.add.text(0, sb.y0 + 14, '-', { ...font, color: '#ffffff' }).setOrigin(0, 0).setScale(2);
+    this.speedUnit = this.add.text(0, sb.y0 + 28, 'km/h', { ...font, color: '#cfd8ea' }).setOrigin(0, 0);
+    this.layoutSpeed();
 
     this.flashRect = this.add.rectangle(0, 0, W, H, 0xffffff, 0).setOrigin(0);
     this.running = false;
+  }
+
+  // center "142 km/h" in the scoreboard screen; shrink the number if it would not fit
+  layoutSpeed() {
+    const sb = ANCHOR.scoreboard, pad = 6, gap = 2;
+    const room = sb.x1 - sb.x0 - pad * 2;
+    this.speedNum.setScale(2);
+    if (this.speedNum.displayWidth + gap + this.speedUnit.displayWidth > room) this.speedNum.setScale(1);
+    const total = this.speedNum.displayWidth + gap + this.speedUnit.displayWidth;
+    const x = Math.round((sb.x0 + sb.x1) / 2 - total / 2);
+    this.speedNum.setX(x);
+    this.speedUnit.setX(x + this.speedNum.displayWidth + gap)
+      .setY(this.speedNum.y + this.speedNum.displayHeight - this.speedUnit.displayHeight - 1);
   }
 
   makeBallTexture() {
@@ -154,7 +170,8 @@ export default class Stadium extends Phaser.Scene {
     addGold(gold);
     state.pitches++; if (isStrike) state.strikes++;
 
-    this.speedText.setText(`${kmh}km/h`);
+    this.speedNum.setText(String(kmh));
+    this.layoutSpeed();
     this.popText(isStrike ? 'STRIKE!' : 'BALL', isStrike ? '#ffe14a' : '#d8dde8', 150, 196, 2);
     this.popText(`+${fmt(gold)}`, '#ffd84a', target.x, target.y - 14, 1);
 
