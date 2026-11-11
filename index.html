@@ -15,14 +15,33 @@
         <div id="rate">+0/초</div>
       </div>
       <div class="hud-center">
-        <div id="stage">초등 1학년 · 연습</div>
+        <div id="stage">초등 1학년</div>
         <div id="player"></div>
+        <div id="promo">
+          <div class="bar"><div class="fill" id="promo-fill"></div><span id="promo-text"></span></div>
+          <button id="btn-promote" disabled>진급</button>
+        </div>
+        <div id="buff" hidden></div>
       </div>
       <div class="hud-right">
         <button id="btn-sound" title="사운드">소리</button>
         <button id="btn-settings" title="설정">설정</button>
       </div>
     </div>
+
+    <!-- upgrade panel (right, collapsible) -->
+    <aside id="panel">
+      <button id="panel-toggle" title="능력치 패널 접기/펴기">◀</button>
+      <div class="panel-body">
+        <div class="panel-head">
+          <span>능력치</span>
+          <div class="bulk" id="bulk">
+            <button data-n="1">x1</button><button data-n="10">x10</button><button data-n="max">MAX</button>
+          </div>
+        </div>
+        <div id="upgrades"></div>
+      </div>
+    </aside>
 
     <!-- first start: player name -->
     <div class="modal" id="modal-name" hidden>

@@ -16,7 +16,12 @@ export const state = {
   sound: true,
   lastSeen: Date.now(),
   avgRate: 0,            // gold/sec over the last 10 min, saved for offline
+  stage: 0,              // index into STAGES
+  lv: { speed: 0, tempo: 0, control: 0, stuff: 0, end: 0 },
+  buffUntil: 0,          // 진급 직후 버프 끝나는 시각
+  bulk: 1,               // upgrade panel: 1, 10 or 'max'
 };
+const DEFAULT_LV = { speed: 0, tempo: 0, control: 0, stuff: 0, end: 0 };
 
 // rolling income history for gold/sec
 const history = [];      // [timestamp, amount]
@@ -54,6 +59,8 @@ export function load() {
 function apply(obj) {
   if (!obj || typeof obj !== 'object' || typeof obj.gold !== 'number') throw new Error('bad save');
   Object.assign(state, obj, { v: VERSION });
+  state.lv = { ...DEFAULT_LV, ...(obj.lv || {}) };     // older saves have no levels yet
+  if (typeof state.stage !== 'number') state.stage = 0;
 }
 
 // ---------- save codes ----------

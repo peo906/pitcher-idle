@@ -4,7 +4,9 @@ import { W, H } from './config.js';
 import Stadium from './scenes/Stadium.js';
 import { state, load, save, ratePerSec, exportCode, importCode, offlineReward, addGold } from './state.js';
 import { fmt } from './format.js';
-import { setSound, unlock } from './sound.js';
+import { setSound, unlock, sfx } from './sound.js';
+import { UPGRADES } from './config.js';
+import { stage, nextStage, quote, buy, atCap, effectText, canPromote, promote, buffActive } from './economy.js';
 
 const $ = id => document.getElementById(id);
 
@@ -36,7 +38,64 @@ async function boot() {
     $('rate').textContent = `+${fmt(ratePerSec())}/초`;
     $('player').textContent = state.name ? `투수 ${state.name}` : '';
     $('btn-sound').textContent = state.sound ? '소리 ON' : '소리 OFF';
+    refreshStage();
+    refreshPanel();
   };
+
+  // ---- promotion (top center) ----
+  const refreshStage = () => {
+    const s = stage(), nx = nextStage();
+    $('stage').textContent = s.name;
+    if (!nx) { $('promo').hidden = true; return; }
+    const pct = Math.min(1, state.gold / s.cost);
+    $('promo-fill').style.width = (pct * 100) + '%';
+    $('promo-text').textContent = `${nx.name}까지 ${fmt(state.gold)} / ${fmt(s.cost)}`;
+    $('btn-promote').disabled = !canPromote();
+    if (buffActive()) {
+      const left = Math.ceil((state.buffUntil - Date.now()) / 1000);
+      $('buff').hidden = false;
+      $('buff').textContent = `진급 버프 골드 ×1.5 · ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+    } else $('buff').hidden = true;
+  };
+  $('btn-promote').onclick = () => { if (promote()) refresh(); };
+
+  // ---- upgrade panel (right) ----
+  const rows = {};
+  for (const key of Object.keys(UPGRADES)) {
+    const el = document.createElement('div');
+    el.className = 'up';
+    el.innerHTML = `<div class="name"></div><button></button><div class="eff"></div>`;
+    el.querySelector('button').onclick = () => {
+      if (buy(key)) { sfx('buy'); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); refresh(); }
+    };
+    $('upgrades').appendChild(el);
+    rows[key] = el;
+  }
+  const refreshPanel = () => {
+    for (const [key, el] of Object.entries(rows)) {
+      const u = UPGRADES[key], lv = state.lv[key], btn = el.querySelector('button');
+      el.querySelector('.name').innerHTML = `${u.name}<b>Lv ${lv}${u.cap !== null ? ' / ' + u.cap : ''}</b>`;
+      const [now, next] = effectText(key);
+      if (atCap(key)) {
+        el.querySelector('.eff').textContent = now;
+        btn.disabled = true; btn.innerHTML = 'MAX';
+      } else {
+        const q = quote(key);
+        el.querySelector('.eff').innerHTML = `${now} <i>→ ${next}</i>`;
+        btn.disabled = state.gold < q.cost;
+        btn.innerHTML = `${fmt(q.cost)}<small>+${q.n}Lv</small>`;
+      }
+    }
+    for (const b of $('bulk').children) b.classList.toggle('on', String(state.bulk) === b.dataset.n);
+  };
+  for (const b of $('bulk').children) b.onclick = () => {
+    state.bulk = b.dataset.n === 'max' ? 'max' : Number(b.dataset.n); save(); refresh();
+  };
+  $('panel-toggle').onclick = () => {
+    const closed = $('panel').classList.toggle('closed');
+    $('panel-toggle').textContent = closed ? '◀' : '▶';
+  };
+  $('panel-toggle').textContent = '▶';
   setInterval(refresh, 100);
   window.addEventListener('gold-pop', () => {
     const g = $('gold'); g.classList.remove('bump'); void g.offsetWidth; g.classList.add('bump'); refresh();

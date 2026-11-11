@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { W, H, STAGE, STATS, MULT, PITCH, ANCHOR, speedKmh, interval, zoneChance, goldMult } from '../config.js';
+import { W, H, MULT, PITCH, ANCHOR, speedKmh, interval, zoneChance, goldMult } from '../config.js';
+import { stage, buffMult } from '../economy.js';
 import { state, addGold } from '../state.js';
 import { sfx } from '../sound.js';
 import { fmt } from '../format.js';
@@ -16,7 +17,8 @@ export default class Stadium extends Phaser.Scene {
     this.load.image('bg', a + 'bg_pro.png');
     this.load.image('bgFront', a + 'bg_pro_front.png');
     this.load.image('clouds', a + 'clouds.png');
-    this.load.spritesheet('pitcher', a + 'pitcher_pro_idle.png', { frameWidth: 64, frameHeight: 64 });
+    for (const k of ['pro', 'elementary'])
+      this.load.spritesheet('pitcher_' + k, a + `pitcher_${k}_idle.png`, { frameWidth: 64, frameHeight: 64 });
     this.load.spritesheet('mitt', a + 'mitt.png', { frameWidth: 40, frameHeight: 32 });
     this.load.json('crowd', a + 'crowd.json');
     this.load.json('sprites', a + 'sprites.json');
@@ -34,11 +36,11 @@ export default class Stadium extends Phaser.Scene {
     this.time.addEvent({ delay: 100, loop: true, callback: () => this.drawCrowd() });
     this.drawCrowd();
 
-    const meta = this.cache.json.get('sprites').pitcher_pro;
-    this.pitcher = this.add.sprite(ANCHOR.mound.x, ANCHOR.mound.feet + (63 - meta.feet), 'pitcher', 0)
-      .setOrigin(meta.originX, 1);
-    this.anims.create({ key: 'breathe', frames: this.anims.generateFrameNumbers('pitcher', { start: 0, end: 1 }), frameRate: 1.2, repeat: -1 });
-    this.pitcher.play('breathe');
+    for (const k of ['pro', 'elementary'])
+      this.anims.create({ key: 'breathe_' + k, frames: this.anims.generateFrameNumbers('pitcher_' + k, { start: 0, end: 1 }), frameRate: 1.2, repeat: -1 });
+    this.pitcher = this.add.sprite(0, 0, 'pitcher_pro', 0);
+    this.applyPitcherArt();
+    window.addEventListener('stage-change', () => this.onPromoted());
 
     // faint strike zone guide
     const z = ANCHOR.zone;
@@ -105,9 +107,9 @@ export default class Stadium extends Phaser.Scene {
 
   pitch() {
     if (!this.running) return;
-    const T = interval(STATS.tempoLv);
+    const T = interval(state.lv.tempo);
     const windup = Math.max(PITCH.minWindup, T - PITCH.flight - PITCH.react);
-    const isStrike = Math.random() < zoneChance(STATS.controlLv);
+    const isStrike = Math.random() < zoneChance(state.lv.control);
     const target = this.pickTarget(isStrike);
 
     // catcher sets the target
@@ -117,8 +119,8 @@ export default class Stadium extends Phaser.Scene {
     // windup: pitcher sinks a little, then releases
     this.pitcher.stop();
     this.tweens.add({
-      targets: this.pitcher, y: this.pitcher.y + 2, duration: windup * 1000 * 0.8, yoyo: false,
-      onComplete: () => { this.pitcher.y -= 2; this.release(target, isStrike); },
+      targets: this.pitcher, y: this.pitcherY + 2, duration: windup * 1000 * 0.8, yoyo: false,
+      onComplete: () => { this.pitcher.y = this.pitcherY; this.release(target, isStrike); },
     });
     this.time.delayedCall(T * 1000, () => this.pitch());
   }
@@ -153,7 +155,7 @@ export default class Stadium extends Phaser.Scene {
   caught(target, isStrike) {
     this.ball.setVisible(false);
     this.mitt.setFrame(1);
-    const kmh = speedKmh(STATS.speedLv) + Phaser.Math.Between(-2, 2);
+    const kmh = speedKmh(state.lv.speed) + Phaser.Math.Between(-2, 2);
     const power = Phaser.Math.Clamp((kmh - 80) / 80, 0.6, 1.2);
 
     // ---- the "pop": everything lands on the same frame ----
@@ -172,7 +174,7 @@ export default class Stadium extends Phaser.Scene {
     sfx(isStrike ? 'strike' : 'ball');
 
     // gold
-    const gold = Math.floor(STAGE.baseGold * goldMult(STATS.speedLv) * (isStrike ? MULT.strike : MULT.ball));
+    const gold = Math.floor(stage().base * goldMult(state.lv.speed) * (isStrike ? MULT.strike : MULT.ball) * buffMult());
     addGold(gold);
     state.pitches++; if (isStrike) state.strikes++;
 
@@ -186,8 +188,32 @@ export default class Stadium extends Phaser.Scene {
     this.time.delayedCall(260, () => {
       this.mitt.setFrame(0);
       this.tweens.add({ targets: this.mitt, x: ANCHOR.mittRest.x, y: ANCHOR.mittRest.y, duration: 200 });
-      this.pitcher.play('breathe');
+      this.pitcher.play(this.breatheKey);
     });
+  }
+
+  // ---------------- pitcher art & promotion ----------------
+  applyPitcherArt() {
+    const key = stage().sprite, meta = this.cache.json.get('sprites')['pitcher_' + key];
+    this.breatheKey = 'breathe_' + key;
+    this.pitcher.setTexture('pitcher_' + key, 0).setOrigin(meta.originX, 1)
+      .setPosition(ANCHOR.mound.x, ANCHOR.mound.feet + (63 - meta.feet));
+    this.pitcherY = this.pitcher.y;
+    this.pitcher.play(this.breatheKey);
+  }
+
+  onPromoted() {
+    this.applyPitcherArt();
+    this.flashRect.setAlpha(0.6);
+    this.tweens.add({ targets: this.flashRect, alpha: 0, duration: 400 });
+    this.cameras.main.shake(160, 0.006);
+    this.confetti.explode(60, W / 2, 40);
+    const t = this.add.text(W / 2, 120, `${stage().name} 진급!`, { fontFamily: 'Galmuri11', fontSize: '11px', color: '#ffe14a', stroke: '#000', strokeThickness: 3 })
+      .setOrigin(0.5).setScale(0.5);
+    this.tweens.add({ targets: t, scale: 2.4, duration: 280, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: t, alpha: 0, y: 104, delay: 1600, duration: 500, onComplete: () => t.destroy() });
+    this.tweens.add({ targets: this.pitcher, y: this.pitcherY - 8, duration: 160, yoyo: true, repeat: 1, ease: 'Quad.easeOut' });
+    sfx('promote');
   }
 
   // ---------------- juice helpers ----------------
@@ -231,6 +257,10 @@ export default class Stadium extends Phaser.Scene {
     this.sparks = this.add.particles(0, 0, 'px2', {
       speed: { min: 40, max: 110 }, angle: { min: 0, max: 360 }, lifespan: { min: 160, max: 280 },
       scale: { start: 1.5, end: 0 }, tint: [0xffffff, 0xffe14a, 0xffb347], gravityY: 120, emitting: false,
+    });
+    this.confetti = this.add.particles(0, 0, 'px2', {
+      speed: { min: 60, max: 180 }, angle: { min: 20, max: 160 }, lifespan: 1800, gravityY: 90,
+      rotate: { min: 0, max: 360 }, tint: [0xffe14a, 0xeb4646, 0x5aa0ff, 0x5aaa5a, 0xffffff], emitting: false,
     });
     this.dust = this.add.particles(0, 0, 'px1', {
       speed: { min: 10, max: 35 }, angle: { min: 200, max: 340 }, lifespan: 380,

@@ -41,6 +41,8 @@ export function sfx(name, power = 1) {
   }
   if (name === 'strike') thump(420, 0.18, 0.12);
   if (name === 'ball') thump(260, 0.12, 0.07);
+  if (name === 'promote') [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => thump(f, 0.22, 0.12), i * 110));
+  if (name === 'buy') thump(880, 0.07, 0.06);
 }
 
 function startCrowd() {                  // quiet stadium murmur
