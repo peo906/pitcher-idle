@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { W, H, STAGE, STATS, MULT, PITCH, ANCHOR, speedKmh, interval, zoneChance, goldMult } from '../config.js';
+import { W, H, STAGE, STATS, MULT, PITCH, ANCHOR, MISS, speedKmh, interval, zoneChance, goldMult, missChance } from '../config.js';
 import { state, addGold } from '../state.js';
 import { sfx } from '../sound.js';
 import { fmt } from '../format.js';
@@ -18,6 +18,7 @@ export default class Stadium extends Phaser.Scene {
     this.load.image('clouds', a + 'clouds.png');
     this.load.spritesheet('pitcher', a + 'pitcher_pro_idle.png', { frameWidth: 64, frameHeight: 64 });
     this.load.spritesheet('mitt', a + 'mitt.png', { frameWidth: 40, frameHeight: 32 });
+    this.load.image('emoteMiss', a + 'emote_miss.png');
     this.load.json('crowd', a + 'crowd.json');
     this.load.json('sprites', a + 'sprites.json');
   }
@@ -53,6 +54,7 @@ export default class Stadium extends Phaser.Scene {
     this.speedText = this.add.text(cx, sb.y0 + 20, '-', { fontFamily: 'Galmuri11', fontSize: '11px', color: '#ffffff' })
       .setOrigin(0.5, 0).setScale(2);
 
+    this.emote = this.add.image(0, 0, 'emoteMiss').setVisible(false);
     this.flashRect = this.add.rectangle(0, 0, W, H, 0xffffff, 0).setOrigin(0);
     this.running = false;
   }
@@ -90,18 +92,24 @@ export default class Stadium extends Phaser.Scene {
     if (!this.running) return;
     const T = interval(STATS.tempoLv);
     const windup = Math.max(PITCH.minWindup, T - PITCH.flight - PITCH.react);
-    const isStrike = Math.random() < zoneChance(STATS.controlLv);
-    const target = this.pickTarget(isStrike);
+    // 실투 or not. Overall strike rate still matches zoneChance(제구).
+    const z = zoneChance(STATS.controlLv), m = missChance(STATS.controlLv);
+    const isMiss = Math.random() < m;
+    const isStrike = isMiss
+      ? Math.random() > MISS.ballShare
+      : Math.random() < Math.min(1, (z - m * (1 - MISS.ballShare)) / (1 - m));
+    const target = this.pickTarget(isStrike);                       // where the ball really goes
+    const call = isMiss ? this.pickCall(target) : target;           // where the catcher asked for it
 
     // catcher sets the target
     this.mitt.setFrame(0);
-    this.tweens.add({ targets: this.mitt, x: target.x, y: target.y, duration: Math.min(220, windup * 800), ease: 'Sine.easeOut' });
+    this.tweens.add({ targets: this.mitt, x: call.x, y: call.y, duration: Math.min(220, windup * 800), ease: 'Sine.easeOut' });
 
     // windup: pitcher sinks a little, then releases
     this.pitcher.stop();
     this.tweens.add({
       targets: this.pitcher, y: this.pitcher.y + 2, duration: windup * 1000 * 0.8, yoyo: false,
-      onComplete: () => { this.pitcher.y -= 2; this.release(target, isStrike); },
+      onComplete: () => { this.pitcher.y -= 2; this.release(target, isStrike, isMiss); },
     });
     this.time.delayedCall(T * 1000, () => this.pitch());
   }
@@ -116,7 +124,17 @@ export default class Stadium extends Phaser.Scene {
     return { x: r(z.x0, z.x1), y: r(z.y1 + 6, z.y1 + 16) };
   }
 
-  release(target, isStrike) {
+  pickCall(target) {
+    const z = ANCHOR.zone, r = Phaser.Math.Between;
+    const cx = (z.x0 + z.x1) / 2, cy = (z.y0 + z.y1) / 2;
+    // the catcher wanted the opposite corner of where it ended up
+    return {
+      x: target.x < cx ? r(cx + 4, z.x1 - 6) : r(z.x0 + 6, cx - 4),
+      y: target.y < cy ? r(cy + 4, z.y1 - 6) : r(z.y0 + 6, cy - 4),
+    };
+  }
+
+  release(target, isStrike, isMiss) {
     sfx('whoosh');
     const from = ANCHOR.release;
     const b = this.ball.setVisible(true).setPosition(from.x, from.y).setScale(0.25);
@@ -129,11 +147,31 @@ export default class Stadium extends Phaser.Scene {
         b.y = from.y + (target.y - from.y) * t - 10 * Math.sin(Math.PI * t) * 0.4;   // slight carry
         b.setScale(0.25 + 1.15 * t);
       },
-      onComplete: () => this.caught(target, isStrike),
+      onComplete: () => this.caught(target, isStrike, isMiss),
     });
+    if (isMiss) {
+      // pitcher knows it slipped right away; catcher lunges late
+      this.time.delayedCall(40, () => this.missReaction());
+      this.tweens.add({ targets: this.mitt, x: target.x, y: target.y, delay: PITCH.flight * 1000 * 0.45,
+        duration: PITCH.flight * 1000 * 0.55, ease: 'Quad.easeOut' });
+    }
   }
 
-  caught(target, isStrike) {
+  missReaction() {
+    const p = this.pitcher;
+    const headX = p.x + 14, headY = p.y - 54;          // beside the face
+    this.emote.setPosition(headX, headY).setVisible(true).setScale(0.3).setAlpha(1);
+    this.tweens.add({ targets: this.emote, scale: 1, duration: 140, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: this.emote, y: headY - 2, duration: 110, yoyo: true, repeat: 2, delay: 140 });
+    this.tweens.add({ targets: this.emote, alpha: 0, delay: 800, duration: 200, onComplete: () => this.emote.setVisible(false) });
+    // head shake: "아차"
+    const x0 = p.x;
+    this.tweens.add({ targets: p, x: { from: x0 - 1, to: x0 + 1 }, duration: 60, yoyo: true, repeat: 3,
+      onComplete: () => { p.x = x0; } });
+    sfx('oops');
+  }
+
+  caught(target, isStrike, isMiss) {
     this.ball.setVisible(false);
     this.mitt.setFrame(1);
     const kmh = speedKmh(STATS.speedLv) + Phaser.Math.Between(-2, 2);
@@ -152,10 +190,10 @@ export default class Stadium extends Phaser.Scene {
     // gold
     const gold = Math.floor(STAGE.baseGold * goldMult(STATS.speedLv) * (isStrike ? MULT.strike : MULT.ball));
     addGold(gold);
-    state.pitches++; if (isStrike) state.strikes++;
+    state.pitches++; if (isStrike) state.strikes++; if (isMiss) state.misses = (state.misses || 0) + 1;
 
     this.speedText.setText(`${kmh}km/h`);
-    this.popText(isStrike ? '스트라이크!' : '볼', isStrike ? '#ffe14a' : '#d8dde8', 150, 196, 2);
+    this.popText(isStrike ? 'STRIKE!' : 'BALL', isStrike ? '#ffe14a' : '#d8dde8', 150, 196, 2);
     this.popText(`+${fmt(gold)}`, '#ffd84a', target.x, target.y - 14, 1);
 
     // glove settles back

@@ -27,6 +27,12 @@ export const interval = lv => Math.max(0.6, 1.5 * Math.pow(0.96, lv));
 export const zoneChance = lv => Math.min(0.85, 0.5 + 0.01 * lv);
 export const goldMult = lv => Math.pow(1.05, lv);
 
+// 실투: the ball misses the catcher's target. Falls with 제구 Lv and (later) pitch mastery.
+// Lv 0: 30%, ~Lv 30: 6%, floor 5%. Most misses end up as balls.
+export const MISS = { ballShare: 0.8 };
+export const missChance = (controlLv, mastery = 0) =>
+  Math.max(0.05, 0.30 - 0.008 * controlLv - 0.004 * mastery);
+
 // fixed template anchors (native coords)
 export const ANCHOR = {
   mound: { x: 240, feet: 172 },

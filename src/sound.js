@@ -41,6 +41,7 @@ export function sfx(name, power = 1) {
   }
   if (name === 'strike') thump(420, 0.18, 0.12);
   if (name === 'ball') thump(260, 0.12, 0.07);
+  if (name === 'oops') { thump(330, 0.09, 0.08); setTimeout(() => thump(220, 0.12, 0.08), 90); }
 }
 
 function startCrowd() {                  // quiet stadium murmur
