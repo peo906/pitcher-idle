@@ -4,7 +4,7 @@ import { W, H, MULT, PITCH, ANCHOR, MISS, speedKmh, interval, zoneChance, goldMu
 import { stage, buffMult, examReady, passExam } from '../economy.js';
 import { Match } from '../match.js';
 import { pickPitch, mods as pitchMods, kmhFor } from '../arsenal.js';
-import { PITCH_BY_ID, BREAK, flightFor, breakEase } from '../config.js';
+import { PITCH_BY_ID, BREAK, flightFor, breakEase, PITCH_FAMILY, FAMILY_COLOR } from '../config.js';
 import { drawPixelText, textWidth } from '../pixelfont.js';
 import { save } from '../state.js';
 import { state, addGold } from '../state.js';
@@ -432,6 +432,8 @@ export default class Stadium extends Phaser.Scene {
     const b = this.ball.setVisible(true).setPosition(from.x, from.y).setScale(0.25);
     const p = { t: 0 };
     const br = BREAK[this.curPitch] || BREAK.fastball, trail = [];
+    const fam = PITCH_FAMILY[this.curPitch] || 'fast', col = FAMILY_COLOR[fam], offspeed = fam !== 'fast';
+    if (offspeed) this.pitchLabel(PITCH_BY_ID[this.curPitch].name, col, flightMs);
     // strike three: the last stretch plays in slow motion, the screen dims, then everything hits at once
     const isK = out && (out.end === 'k' || out.end === 'k3');
     const slowEase = t => (t < 0.35 ? Math.pow(t / 0.35, 2) * 0.62 : 0.62 + 0.38 * Math.pow((t - 0.35) / 0.65, 1.4));
@@ -457,7 +459,15 @@ export default class Stadium extends Phaser.Scene {
         b.setAngle(t * (this.curPitch === 'gyro' ? 1440 : 540));
         trail.push([b.x, b.y, b.scale]); if (trail.length > 9) trail.shift();
         this.trail.clear();
-        trail.forEach(([x, y, sc], i) => this.trail.fillStyle(0xffffff, 0.06 + 0.05 * i).fillCircle(x, y, 4 * sc * (0.5 + i / 18)));
+        // trail: faint white for fastballs, coloured and stronger for off-speed pitches
+        trail.forEach(([x, y, sc], i) => this.trail.fillStyle(col, offspeed ? 0.1 + 0.07 * i : 0.04 + 0.03 * i)
+          .fillCircle(x, y, 4 * sc * (0.5 + i / 18)));
+        // drop pitches: downward streaks over the last stretch and a small pop as it dives
+        if (fam === 'drop' && t > 0.68) {
+          const a = Math.min(1, (t - 0.68) / 0.2), r = 5 * b.scale;
+          for (const ox of [-r * 0.9, 0, r * 0.9]) this.trail.lineStyle(1.5, col, 0.85 * a).lineBetween(b.x + ox, b.y - r - 3 - 10 * a, b.x + ox, b.y - r - 2);
+          if (t > 0.82) b.setScale(b.scale * (1 + 0.14 * Math.sin(Math.PI * (t - 0.82) / 0.18)));
+        }
       },
       onComplete: () => {
         b.setAngle(0); this.trail.clear();
@@ -757,6 +767,15 @@ export default class Stadium extends Phaser.Scene {
     if (t && !this.inBreak && !this.playing && t.getRemaining() > 400) { t.remove(false); this.nextPitch = this.time.delayedCall(300, () => this.pitch()); }
   }
   adminPitch(id) { this.forcePitch = id; }
+  pitchLabel(name, col, flightMs) {     // the pitch name pops out by the pitcher's hand as it is released
+    const r = ANCHOR.release;
+    const t = this.add.text(r.x + 16, r.y - 12, name, { fontFamily: 'Galmuri11', fontSize: '11px',
+      color: '#' + col.toString(16).padStart(6, '0'), stroke: '#000', strokeThickness: 2,
+      backgroundColor: 'rgba(8,12,24,0.72)', padding: { x: 3, y: 1 } }).setOrigin(0, 0.5).setScale(0.6);
+    this.tweens.add({ targets: t, scale: 1, duration: 120, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: t, alpha: 0, y: t.y - 6, delay: flightMs * 0.9, duration: 260, onComplete: () => t.destroy() });
+  }
+
   previewPitch(id, target = { x: 240, y: 208 }) {   // throw one pitch of this type at a fixed spot (trajectory check)
     this.curPitch = id; this.curFlight = flightFor(id); this.release(target, true, null, null);
   }

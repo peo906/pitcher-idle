@@ -168,3 +168,13 @@ export const BREAK = {
 // how much the flight slows mid-way grows with the size of the break (fastball: none)
 export const breakEase = br => 0.25 * Math.min(1, (Math.abs(br.dx) + Math.abs(br.dy) * 1.5 + (br.wobble || 0) * 2) / 36);
 export const flightFor = id => PITCH.flight / Math.max(0.7, PITCH_BY_ID[id].speed) * (id === 'gyro' ? 0.85 : 1);
+
+// visual families: trail colour + extra cues so pitches read apart even when the path is subtle
+export const PITCH_FAMILY = {
+  fastball: 'fast', gyro: 'fast',
+  cutter: 'slide', slider: 'slide', sweeper: 'slide',
+  curve: 'drop', knucklecurve: 'drop', splitter: 'drop', fork: 'drop',
+  changeup: 'fade', circlechange: 'fade', sinker: 'fade', twoseam: 'fade',
+  knuckleball: 'knuckle',
+};
+export const FAMILY_COLOR = { fast: 0xffffff, slide: 0xffd23c, drop: 0x5aa8ff, fade: 0xff8a4a, knuckle: 0xd07aff };
