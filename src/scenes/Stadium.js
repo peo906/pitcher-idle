@@ -429,7 +429,7 @@ export default class Stadium extends Phaser.Scene {
     }
     if (out && out.swing) this.time.delayedCall(flightMs * 0.6, () => this.swing());
     const from = ANCHOR.release;
-    const b = this.ball.setVisible(true).setPosition(from.x, from.y).setScale(0.25);
+    const b = this.ball.setVisible(true).setPosition(from.x, from.y).setScale(0.32);
     const p = { t: 0 };
     const br = BREAK[this.curPitch] || BREAK.fastball, trail = [];
     const fam = PITCH_FAMILY[this.curPitch] || 'fast', col = FAMILY_COLOR[fam], offspeed = fam !== 'fast';
@@ -455,10 +455,12 @@ export default class Stadium extends Phaser.Scene {
         if (br.wobble) { const w = Math.sin(Math.PI * t); ox += br.wobble * Math.sin(t * 31) * w; oy += br.wobble * 0.7 * Math.sin(t * 23 + 1) * w; }
         b.x = from.x + (target.x - from.x) * t + ox;
         b.y = from.y + (target.y - from.y) * t + oy;
-        b.setScale(0.25 + 1.15 * t);
+        b.setScale(0.32 + 1.08 * t);
         b.setAngle(t * (this.curPitch === 'gyro' ? 1440 : 540));
         trail.push([b.x, b.y, b.scale]); if (trail.length > 9) trail.shift();
         this.trail.clear();
+        // dark rim that never shrinks below ~2.5px, so the white ball stays visible over the white jersey
+        this.trail.fillStyle(0x0b1020, 0.85).fillCircle(b.x, b.y, Math.max(2.6, 6 * b.scale + 1));
         // trail: faint white for fastballs, coloured and stronger for off-speed pitches
         trail.forEach(([x, y, sc], i) => this.trail.fillStyle(col, offspeed ? 0.1 + 0.07 * i : 0.04 + 0.03 * i)
           .fillCircle(x, y, 4 * sc * (0.5 + i / 18)));

@@ -102,7 +102,7 @@ export const goldMult = lv => Math.pow(1.05, lv) * PACE_COMP;
 // fixed template anchors (native coords)
 export const ANCHOR = {
   mound: { x: 240, feet: 172 },
-  release: { x: 231, y: 124 },          // right-hander's hand, seen from the catcher
+  release: { x: 219, y: 110 },          // over the right shoulder (catcher's left), clear of the white jersey
   zone: { x0: 214, y0: 178, x1: 266, y1: 238 },
   mittRest: { x: 240, y: 222 },
   scoreboard: { x0: 193, y0: 48, x1: 286, y1: 86 },   // inner screen, measured from bg_pro.png
