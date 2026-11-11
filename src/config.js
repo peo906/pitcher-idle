@@ -75,9 +75,12 @@ export const PITCH = {
 };
 
 export const speedKmh = lv => Math.round(85 + 80 * (1 - Math.pow(0.977, lv)));
-export const interval = lv => Math.max(0.6, 1.5 * Math.pow(0.96, lv));
+// 템포: start 2.25s (27/min), floor 0.9s (67/min) at Lv 23 — 2/3 of the original pace
+export const interval = lv => Math.max(0.9, 2.25 * Math.pow(0.96, lv));
+// fewer pitches -> each pitch pays 1.5x, so the 10-hour first run stays the same
+export const PACE_COMP = 1.5;
 export const zoneChance = lv => Math.min(0.85, 0.5 + 0.01 * lv);
-export const goldMult = lv => Math.pow(1.05, lv);
+export const goldMult = lv => Math.pow(1.05, lv) * PACE_COMP;
 
 // fixed template anchors (native coords)
 export const ANCHOR = {
