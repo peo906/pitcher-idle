@@ -3,6 +3,7 @@ import { W, H, MULT, PITCH, ANCHOR, speedKmh, interval, zoneChance, goldMult,
   STAGE_TIER, STAGE_INNING, STAGE_GAUGE, BULLPEN_STAGE, SEASON_GAMES } from '../config.js';
 import { stage, buffMult, examReady, passExam } from '../economy.js';
 import { Match } from '../match.js';
+import { drawPixelText, textWidth } from '../pixelfont.js';
 import { save } from '../state.js';
 import { state, addGold } from '../state.js';
 import { sfx } from '../sound.js';
@@ -28,6 +29,8 @@ export default class Stadium extends Phaser.Scene {
   }
 
   create() {
+    this.cheer = { left: 0, right: 0 };   // crowd cheers until these times
+    this.banner = null;                  // scoreboard banner in progress
     // ---- layers: sky -> clouds -> stadium (sky cut out) -> crowd -> pitcher -> ball -> mitt -> fx ----
     this.add.image(0, 0, 'bg').setOrigin(0);
     this.clouds = this.add.tileSprite(0, 4, W, 60, 'clouds').setOrigin(0);
@@ -66,6 +69,8 @@ export default class Stadium extends Phaser.Scene {
     this.boardSpeed = this.add.text(sb.x1 - 5, sb.y1 - 3, '', { ...small, color: '#cfd8ea' }).setOrigin(1, 1).setVisible(false);
     this.speedLabel = this.children.list.find(o => o.text === '구속');
 
+    this.bannerG = this.add.graphics();
+
     this.batter = this.makeBatter();
     this.batter.setVisible(false);
 
@@ -97,16 +102,90 @@ export default class Stadium extends Phaser.Scene {
     return 'ball';
   }
 
+  // left stands = our fans, right stands = visitors
   drawCrowd() {
     const g = this.crowd; g.clear();
-    const f = this.crowdTick++;
+    const f = this.crowdTick++, now = this.time.now;
+    const cheerL = now < this.cheer.left, cheerR = now < this.cheer.right;
     for (const [x, y, s, h, sh, phase, speed] of this.people) {
-      const up = ((f * speed + phase) % 12) < 3 ? 1 : 0;
+      const cheering = x < W / 2 ? cheerL : cheerR;
+      const bounce = (f + phase) % 4 < 2;
+      const up = cheering ? 2 + (bounce ? 1 : 0) : (((f * speed + phase) % 12) < 3 ? 1 : 0);
       const yy = y - up;
       g.fillStyle(HAIR[h]).fillRect(x, yy, 2, 1);
       g.fillStyle(SKIN[s]).fillRect(x, yy + 1, 2, 1);
-      g.fillStyle(SHIRT[sh]).fillRect(x, yy + 2, 2, 2);
+      g.fillStyle(SHIRT[sh]).fillRect(x, yy + 2, 2, cheering ? 3 : 2);
+      if (cheering && bounce) g.fillStyle(SKIN[s]).fillRect(x - 1, yy - 1, 1, 1).fillRect(x + 2, yy - 1, 1, 1);  // arms up
     }
+    if (this.banner) this.drawBanner();
+  }
+
+  cheerFor(side, ms) {
+    const until = this.time.now + ms;
+    if (side === 'left' || side === 'both') this.cheer.left = until;
+    if (side === 'right' || side === 'both') this.cheer.right = until;
+  }
+
+  // ---------------- scoreboard banners ----------------
+  showBanner(lines, colors, ms) {
+    this.banner = { lines, colors, until: this.time.now + ms, t0: this.time.now };
+    this.drawBoard(); this.drawBanner();
+    this.time.delayedCall(ms, () => { if (this.banner && this.time.now >= this.banner.until) { this.banner = null; this.bannerG.clear(); this.drawBoard(); } });
+  }
+
+  drawBanner() {
+    const b = this.banner, g = this.bannerG, sb = ANCHOR.scoreboard;
+    g.clear();
+    if (!b || this.time.now >= b.until) return;
+    const phase = Math.floor((this.time.now - b.t0) / 120);
+    g.fillStyle(phase % 2 ? 0x1e2a50 : 0x12193a, 1).fillRect(sb.x0, sb.y0, sb.x1 - sb.x0, sb.y1 - sb.y0);
+    const color = b.colors[phase % b.colors.length];
+    const scale = 2, lineH = 7 * scale, gap = 4;
+    const total = b.lines.length * lineH + (b.lines.length - 1) * gap;
+    let y = Math.round(sb.y0 + (sb.y1 - sb.y0 - total) / 2);
+    for (const line of b.lines) {
+      const x = Math.round((sb.x0 + sb.x1) / 2 - textWidth(line, scale) / 2);
+      drawPixelText(g, line, x, y, color, scale);
+      y += lineH + gap;
+    }
+  }
+
+  // ---------------- result effects ----------------
+  fxStrikeout(k3, target) {
+    this.showBanner(['STRIKE', 'OUT!'], [0xffe14a, 0xffffff], k3 ? 1800 : 1400);
+    this.cheerFor('left', k3 ? 2000 : 1500);
+    sfx('cheer', k3 ? 1 : 0.7);
+    // big K over the zone (placeholder until catcher / batter art exists)
+    const z = ANCHOR.zone, k = this.add.graphics();
+    k.lineStyle(2, 0xffe14a, 1).strokeRect(z.x0, z.y0, z.x1 - z.x0, z.y1 - z.y0);
+    drawPixelText(k, 'K', (z.x0 + z.x1) / 2 - 9, (z.y0 + z.y1) / 2 - 14, 0xffe14a, 4);
+    this.tweens.add({ targets: k, alpha: { from: 1, to: 0 }, delay: 600, duration: 300, onComplete: () => k.destroy() });
+    // pitcher hops
+    const y0 = this.pitcherY;
+    this.tweens.add({ targets: this.pitcher, y: y0 - (k3 ? 7 : 5), duration: 120, yoyo: true, repeat: k3 ? 2 : 1, ease: 'Quad.easeOut',
+      onComplete: () => { this.pitcher.y = y0; } });
+  }
+
+  fxOut(kind) {
+    this.showBanner([kind === 'fly' ? 'FLY' : 'GROUND', 'OUT!'], [0xffe14a, 0xffffff], 1100);
+    this.cheerFor('left', 900);
+    sfx('cheer', 0.4);
+  }
+
+  fxHit(kind) {
+    const word = { single: ['HIT!'], double: ['DOUBLE!'], triple: ['TRIPLE!'] }[kind];
+    this.showBanner(word, [0xffffff, 0x78c8ff], 1300);
+    this.cheerFor('right', kind === 'single' ? 1000 : 1500);
+    sfx('cheer', 0.5);
+  }
+
+  fxHomeRun() {
+    this.showBanner(['HOME', 'RUN!'], [0xff5a4a, 0xffffff], 2000);
+    this.cheerFor('right', 2200);
+    this.cameras.main.shake(320, 0.008);
+    this.flashRect.setAlpha(0.35);
+    this.tweens.add({ targets: this.flashRect, alpha: 0, duration: 250 });
+    sfx('cheer', 1);
   }
 
   // ---------------- the pitch loop ----------------
@@ -240,6 +319,8 @@ export default class Stadium extends Phaser.Scene {
       const color = out.end === 'walk' || out.call === 'ball' ? '#d8dde8' : '#ffe14a';
       this.popText(label, color, 150, 196, out.end ? 2.4 : 2);
       if (out.end === 'k3') this.popText('3구 삼진 x2', '#ffb347', 150, 214, 1);
+      if (out.end === 'k' || out.end === 'k3') this.fxStrikeout(out.end === 'k3', target);
+      if (out.end === 'walk') this.showBanner(['BALL', 'FOUR'], [0xd8dde8, 0x9fc4ff], 1100);
       this.afterPA(out);
     } else {
       this.popText(isStrike ? 'STRIKE!' : 'BALL', isStrike ? '#ffe14a' : '#d8dde8', 150, 196, 2);
@@ -303,6 +384,11 @@ export default class Stadium extends Phaser.Scene {
       double: ['TWO-BASE HIT', '#ff8a7a'], triple: ['THREE-BASE HIT', '#ff8a7a'], hr: ['HOME RUN', '#ff5a4a'] };
     if (key === 'foul') this.popText('FOUL', '#d8dde8', 150, 196, 2);
     else this.time.delayedCall(dur * 0.6, () => this.popText(LABEL[key][0], LABEL[key][1], 150, 196, 2.4));
+    if (key === 'hr') { this.flashRect.setAlpha(0.25); this.tweens.add({ targets: this.flashRect, alpha: 0, duration: 150 }); }
+    const landing = key === 'hr' ? dur * 0.95 : dur * 0.6;
+    if (key === 'fly' || key === 'ground') this.time.delayedCall(landing, () => this.fxOut(key));
+    if (key === 'single' || key === 'double' || key === 'triple') this.time.delayedCall(landing, () => this.fxHit(key));
+    if (key === 'hr') this.time.delayedCall(landing, () => this.fxHomeRun());
     if (out.end) this.time.delayedCall(dur * 0.6, () => this.afterPA(out));
     this.drawBoard(); this.emit();
     this.time.delayedCall(260, () => this.pitcher.play(this.breatheKey));
@@ -350,6 +436,7 @@ export default class Stadium extends Phaser.Scene {
     const glow = this.add.rectangle(sb.x0, sb.y0, sb.x1 - sb.x0, sb.y1 - sb.y0, 0xffffff, 0).setOrigin(0);
     this.tweens.add({ targets: glow, alpha: { from: 0.55, to: 0 }, duration: 220, repeat: 3, onComplete: () => glow.destroy() });
     sfx('inning');
+    this.showBanner(['CHANGE'], [0x9fc4ff, 0xffffff], 1900);
 
     this.time.delayedCall(2100, () => { this.inBreak = false; this.drawBoard(); this.emit(); this.showBatter(false); });
   }
@@ -360,6 +447,9 @@ export default class Stadium extends Phaser.Scene {
     state.record[res.win ? 'w' : res.draw ? 'd' : 'l']++;
     window.dispatchEvent(new CustomEvent('game-over', { detail: { ...res, exam: m.exam } }));
     this.popText(res.win ? 'WIN!' : res.draw ? 'DRAW' : 'LOSE', res.win ? '#ffe14a' : '#d8dde8', W / 2, 130, 3);
+    this.showBanner([res.win ? 'WIN!' : res.draw ? 'DRAW' : 'LOSE'], res.win ? [0xffe14a, 0xffffff] : [0xd8dde8, 0x7a86a6], 2200);
+    this.cheerFor(res.win ? 'left' : res.draw ? 'both' : 'right', 2200);
+    if (res.win) sfx('cheer', 1);
     this.match = null;
     this.batter.setVisible(false);
     const pro = STAGE_GAUGE[state.stage] === 0;
@@ -376,7 +466,9 @@ export default class Stadium extends Phaser.Scene {
   drawBoard() {
     const g = this.board, sb = ANCHOR.scoreboard, m = this.match;
     g.clear();
-    const inGame = !!m;
+    const inGame = !!m && !this.banner;
+    if (this.banner) { this.boardTop.setVisible(false); this.boardSpeed.setVisible(false); this.speedNum.setVisible(false);
+      this.speedUnit.setVisible(false); if (this.speedLabel) this.speedLabel.setVisible(false); this.hideBoardLabels(); return; }
     this.boardTop.setVisible(inGame); this.boardSpeed.setVisible(inGame);
     this.speedNum.setVisible(!inGame); this.speedUnit.setVisible(!inGame);
     if (this.speedLabel) this.speedLabel.setVisible(!inGame);
