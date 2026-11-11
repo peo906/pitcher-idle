@@ -208,3 +208,8 @@ html, body { margin: 0; height: 100%; background: #0b0d12; color: #f2f2f2; font-
 .stage-grid button.on { background: #e0a82e; color: #1a1205; }
 .tools { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
 #btn-admin { background: rgba(120, 30, 40, .85) !important; }
+.force-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 6px; }
+.force-grid button { font-size: 12px; padding: 6px 2px; }
+.force-grid button.on { background: #3a9e5a; }
+.tools.two { margin-bottom: 4px; }
+#modal-admin h3 small { font-weight: normal; }

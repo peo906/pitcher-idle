@@ -356,7 +356,7 @@ export default class Stadium extends Phaser.Scene {
 
     let isStrike, out = null, miss = null;
     const lefty = this.match && this.match.lefty;          // the batter at the plate now (pitch() may roll the next one)
-    if (this.match) { out = this.match.pitch(state.lv); isStrike = out.inZone; miss = out.miss; }
+    if (this.match) { out = this.match.pitch(state.lv, this.forceNext); this.forceNext = null; isStrike = out.inZone; miss = out.miss; }
     else {
       miss = Math.random() < missChance(state.lv.control) ? (Math.random() < MISS.wideShare ? 'wide' : 'middle') : null;
       isStrike = miss === 'middle' ? true : miss === 'wide' ? false : Math.random() < zoneChance(state.lv.control);
@@ -720,6 +720,15 @@ export default class Stadium extends Phaser.Scene {
     this.drawBoard(); this.emit();
     window.dispatchEvent(new CustomEvent('gold-pop'));
     this.popText(`${stage().name} (관리자 이동)`, '#9fc4ff', W / 2, 140, 1.5);
+  }
+  adminForce(key) {                     // the next pitch will be this result (starts a game if needed)
+    if (!this.match) { state.gauge = 0; this.startGame(); }
+    this.forceNext = key;
+  }
+  adminMood(kind) {
+    const m = this.match; if (!m) return;
+    if (kind === 'shrink') { m.shrink = 15; m.outStreak = 0; } else { m.shrink = 0; m.outStreak = 3; }
+    this.emit();
   }
   adminStartGame() { if (!this.match) { state.gauge = 0; this.startGame(); } }
   adminEndGame(win) {

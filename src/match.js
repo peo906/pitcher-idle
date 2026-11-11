@@ -19,19 +19,22 @@ export class Match {
   get confident() { return this.outStreak >= MOOD.confStreak; }
 
   // Decide one pitch. lv = pitcher levels. Returns everything the scene needs to draw it.
-  pitch(lv) {
+  // Decide one pitch. lv = pitcher levels. force = admin test override (see FORCE below).
+  pitch(lv, force = null) {
     const J = JUDGE, T = this.tier;
+    const F = force ? applyForce(this, force) : {};
+    const R = (key, p) => (key in F ? F[key] : Math.random() < p);   // a roll, unless the admin pinned it
+
     // 실투 first: 'wide' slips out of the zone, 'middle' hangs right over the plate
-    const miss = Math.random() < missChance(lv.control, this.shrink)
-      ? (Math.random() < MISS.wideShare ? 'wide' : 'middle') : null;
+    const miss = R('miss', missChance(lv.control, this.shrink)) ? (R('wide', MISS.wideShare) ? 'wide' : 'middle') : null;
     const zone = Math.min(J.maxZone, zoneChance(lv.control) + (this.confident ? MOOD.confZone : 0));
-    const inZone = miss === 'middle' ? true : miss === 'wide' ? false : Math.random() < zone;
-    const swing = Math.random() < (miss === 'middle' ? MISS.middle.swing : inZone ? J.swingIn : J.swingOut);
+    const inZone = miss === 'middle' ? true : miss === 'wide' ? false : R('inZone', zone);
+    const swing = R('swing', miss === 'middle' ? MISS.middle.swing : inZone ? J.swingIn : J.swingOut);
     const out = { inZone, swing, miss, call: null, end: null, mult: 1 };
     this.pitchesInPA++;
 
     // a wide miss with runners on can get past the catcher: every runner moves up
-    if (miss === 'wide' && !swing && this.bases.some(Boolean) && Math.random() < MISS.wildPitch) {
+    if (miss === 'wide' && !swing && this.bases.some(Boolean) && R('wild', MISS.wildPitch)) {
       out.wild = true; const before = this.runs;
       this.advanceRunnersOnly(1);
       this.inningRuns += this.runs - before;
@@ -39,10 +42,10 @@ export class Match {
     }
 
     // 데드볼: a wide miss that runs into the batter. Batter takes first, forced runners move up.
-    if (miss === 'wide' && !swing && !out.wild && Math.random() < MISS.hbp) {
+    if (miss === 'wide' && !swing && !out.wild && R('hbp', MISS.hbp)) {
       this.hbps = (this.hbps || 0) + 1;
       out.call = 'hbp'; out.end = 'hbp';
-      out.benchClear = Math.random() < (this.hbps >= 2 ? MISS.benchClearRepeat : MISS.benchClear);
+      out.benchClear = R('bench', this.hbps >= 2 ? MISS.benchClearRepeat : MISS.benchClear);
       this.finishPA(out);
       out.count = { b: this.balls, s: this.strikes, o: this.outs };
       return out;
@@ -54,23 +57,22 @@ export class Match {
     } else {
       const contact = miss === 'middle' ? Math.min(0.97, T.contact + MISS.middle.contactBonus)
         : Math.max(J.minContact, T.contact - J.endPerLv * lv.end);
-      if (Math.random() >= contact) { this.strikes++; out.call = 'swingMiss'; out.mult = 1.1; }
-      else if (Math.random() < J.foul) {
+      if (!R('contact', contact)) { this.strikes++; out.call = 'swingMiss'; out.mult = 1.1; }
+      else if (R('foul', J.foul)) {
         out.call = 'foul'; out.mult = 1.1;
         if (this.strikes < 2) this.strikes++;
       } else {
         let hitP = Math.max(J.minHit, T.hit - J.stuffHitPerLv * lv.stuff + this.shrink / 100 - (this.confident ? MOOD.confHit : 0));
         if (miss === 'middle') hitP = Math.min(0.75, hitP * MISS.middle.hitMult);
-        if (Math.random() < hitP) {
+        out.call = 'inplay';
+        if (R('hit', hitP)) {
           let hrP = Math.max(J.minHr, T.hr - J.stuffHrPerLv * lv.stuff);
           if (miss === 'middle') hrP = Math.min(0.6, hrP * MISS.middle.hrMult);
           const r = Math.random();
-          out.call = 'inplay';
-          out.end = r < hrP ? 'hr' : (r < hrP + (1 - hrP) * J.single ? 'single'
-                  : r < hrP + (1 - hrP) * (J.single + J.double) ? 'double' : 'triple');
+          out.end = F.type || (r < hrP ? 'hr' : (r < hrP + (1 - hrP) * J.single ? 'single'
+                  : r < hrP + (1 - hrP) * (J.single + J.double) ? 'double' : 'triple'));
         } else {
-          out.call = 'inplay';
-          out.end = Math.random() < 0.5 ? 'fly' : 'ground';
+          out.end = F.outType || (Math.random() < 0.5 ? 'fly' : 'ground');
         }
       }
     }
@@ -163,4 +165,33 @@ export class Match {
     else if (win) { bonus = GAME_BONUS.cgWin; label = '완투승'; }
     return { win, draw, bonus, label, bonusGold: Math.floor(this.gold * bonus), score: [this.teamRuns, this.runs] };
   }
+}
+
+// ---------------- admin: force the next pitch ----------------
+// Each preset sets up the count/bases if needed and pins the rolls that lead to the result.
+const CLEAN = { miss: false };
+const INPLAY = { ...CLEAN, inZone: true, swing: true, contact: true, foul: false };
+export const FORCE = {
+  k3:     { label: '3구 삼진',   setup: m => { m.balls = 0; m.strikes = 2; m.pitchesInPA = 2; }, F: { ...CLEAN, inZone: true, swing: false } },
+  k:      { label: '삼진',       setup: m => { m.strikes = 2; m.pitchesInPA = Math.max(3, m.pitchesInPA); }, F: { ...CLEAN, inZone: true, swing: false } },
+  walk:   { label: '볼넷',       setup: m => { m.balls = 3; }, F: { ...CLEAN, inZone: false, swing: false } },
+  foul:   { label: '파울',       F: { ...INPLAY, foul: true } },
+  fly:    { label: '뜬공 아웃',  F: { ...INPLAY, hit: false, outType: 'fly' } },
+  ground: { label: '땅볼 아웃',  F: { ...INPLAY, hit: false, outType: 'ground' } },
+  single: { label: '안타',       F: { ...INPLAY, hit: true, type: 'single' } },
+  double: { label: '2루타',      F: { ...INPLAY, hit: true, type: 'double' } },
+  triple: { label: '3루타',      F: { ...INPLAY, hit: true, type: 'triple' } },
+  hr:     { label: '홈런',       F: { ...INPLAY, hit: true, type: 'hr' } },
+  wide:   { label: '실투: 빠지는 공', F: { miss: true, wide: true, swing: false, wild: false, hbp: false } },
+  middle: { label: '실투: 몰린 공',   F: { miss: true, wide: false } },
+  wild:   { label: '폭투',       setup: m => { if (!m.bases.some(Boolean)) m.bases[0] = 1; }, F: { miss: true, wide: true, swing: false, wild: true } },
+  hbp:    { label: '데드볼',     F: { miss: true, wide: true, swing: false, wild: false, hbp: true, bench: false } },
+  bench:  { label: '벤치클리어링', F: { miss: true, wide: true, swing: false, wild: false, hbp: true, bench: true } },
+  pull:   { label: '강판',       setup: m => { m.runs = Math.max(m.runs, m.pullLimit - 1); }, F: { ...INPLAY, hit: true, type: 'hr' } },
+  inning: { label: '이닝 종료',  setup: m => { m.outs = 2; }, F: { ...INPLAY, hit: false, outType: 'fly' } },
+};
+function applyForce(m, key) {
+  const f = FORCE[key]; if (!f) return {};
+  if (f.setup) f.setup(m);
+  return f.F;
 }

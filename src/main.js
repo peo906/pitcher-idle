@@ -6,6 +6,7 @@ import { state, load, save, ratePerSec, exportCode, importCode, offlineReward, a
 import { fmt } from './format.js';
 import { setSound, unlock, sfx } from './sound.js';
 import { UPGRADES, STAGES } from './config.js';
+import { FORCE } from './match.js';
 import { stage, nextStage, quote, buy, atCap, effectText, canPromote, promote, buffActive } from './economy.js';
 
 const $ = id => document.getElementById(id);
@@ -203,10 +204,21 @@ async function boot() {
       b.onclick = () => { scene().adminJump(i); markStage(); refresh(); };
       grid.appendChild(b);
     });
+    const fgrid = $('admin-force');
+    for (const [key, f] of Object.entries(FORCE)) {
+      const b = document.createElement('button');
+      b.textContent = f.label;
+      b.onclick = () => {
+        scene().adminForce(key);
+        [...fgrid.children].forEach(x => x.classList.remove('on')); b.classList.add('on');
+        setTimeout(() => b.classList.remove('on'), 2500);
+      };
+      fgrid.appendChild(b);
+    }
     const markStage = () => [...grid.children].forEach(b => b.classList.toggle('on', Number(b.dataset.i) === state.stage));
     $('btn-admin').onclick = () => { markStage(); $('modal-admin').hidden = false; };
     $('admin-close').onclick = () => { $('modal-admin').hidden = true; };
-    document.querySelectorAll('#modal-admin .tools button').forEach(b => b.onclick = () => {
+    document.querySelectorAll('#modal-admin .tools button[data-act]').forEach(b => b.onclick = () => {
       const s = scene(), act = b.dataset.act;
       if (act === 'gold') addGold(STAGES[state.stage].cost || 1e6);
       if (act === 'gold10') addGold(state.gold * 9);
@@ -216,6 +228,8 @@ async function boot() {
       if (act === 'lose') s.adminEndGame(false);
       if (act === 'maxlv') for (const k in state.lv) state.lv[k] = UPGRADES[k].cap === null ? state.lv[k] + 10 : Math.min(UPGRADES[k].cap, state.lv[k] + 10);
       if (act === 'resetlv') for (const k in state.lv) state.lv[k] = 0;
+      if (act === 'shrink') s.adminMood('shrink');
+      if (act === 'confident') s.adminMood('confident');
       save(); refresh(); window.dispatchEvent(new CustomEvent('gold-pop'));
     });
   }
