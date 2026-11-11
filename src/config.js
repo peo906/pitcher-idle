@@ -26,15 +26,14 @@ export const STAGES = [
 ];
 // 경기 설정 (기획서 '연습과 경기', '타자 수준표', '경기 보너스')
 // tier per stage index, innings per stage, practice gauge per stage (0 = pro, no practice)
-// 2026-11-11: batters strengthened so early stages are harder (초등1 Lv0 승률 ~43%, 홈런 3경기에 1개)
 export const TIERS = {
-  vw: { name: '매우 약함', contact: 0.76, hit: 0.32, hr: 0.10 },
-  w:  { name: '약함',     contact: 0.78, hit: 0.33, hr: 0.11 },
-  n:  { name: '보통',     contact: 0.80, hit: 0.34, hr: 0.12 },
-  s:  { name: '강함',     contact: 0.82, hit: 0.35, hr: 0.14 },
-  vs: { name: '매우 강함', contact: 0.83, hit: 0.35, hr: 0.16 },
-  p:  { name: '프로',     contact: 0.85, hit: 0.36, hr: 0.18 },
-  i:  { name: '국제·메이저', contact: 0.87, hit: 0.37, hr: 0.22 },
+  vw: { name: '매우 약함', contact: 0.65, hit: 0.22, hr: 0.05 },
+  w:  { name: '약함',     contact: 0.70, hit: 0.25, hr: 0.08 },
+  n:  { name: '보통',     contact: 0.75, hit: 0.28, hr: 0.10 },
+  s:  { name: '강함',     contact: 0.78, hit: 0.30, hr: 0.12 },
+  vs: { name: '매우 강함', contact: 0.80, hit: 0.32, hr: 0.15 },
+  p:  { name: '프로',     contact: 0.82, hit: 0.33, hr: 0.18 },
+  i:  { name: '국제·메이저', contact: 0.85, hit: 0.35, hr: 0.22 },
 };
 export const STAGE_TIER   = ['vw','vw','w','w','w','n','n','n','s','s','s','vs','p','p','p','p','i','i'];
 export const STAGE_INNING = [3,3,3,3,3,3,5,5,5,7,7,7,6,2,9,9,9,9];
