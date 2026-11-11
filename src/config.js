@@ -33,5 +33,5 @@ export const ANCHOR = {
   release: { x: 231, y: 124 },          // right-hander's hand, seen from the catcher
   zone: { x0: 214, y0: 178, x1: 266, y1: 238 },
   mittRest: { x: 240, y: 222 },
-  scoreboard: { x0: 193, y0: 48, x1: 286, y1: 87 },
+  scoreboard: { x0: 193, y0: 48, x1: 286, y1: 86 },   // inner screen, measured from bg_pro.png
 };

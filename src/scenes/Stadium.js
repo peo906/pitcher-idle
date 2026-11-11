@@ -49,11 +49,11 @@ export default class Stadium extends Phaser.Scene {
 
     // scoreboard: speed gun
     const sb = ANCHOR.scoreboard, cx = (sb.x0 + sb.x1) / 2;
-    const font = { fontFamily: 'Galmuri11', fontSize: '11px' };
-    this.add.text(cx, sb.y0 + 3, '구속', { ...font, color: '#9fc4ff' }).setOrigin(0.5, 0);
-    // big number + small unit, kept inside the screen
-    this.speedNum = this.add.text(0, sb.y0 + 14, '-', { ...font, color: '#ffffff' }).setOrigin(0, 0).setScale(2);
-    this.speedUnit = this.add.text(0, sb.y0 + 28, 'km/h', { ...font, color: '#cfd8ea' }).setOrigin(0, 0);
+    const small = { fontFamily: 'Galmuri9', fontSize: '9px' };
+    this.add.text(cx, sb.y0 + 2, '구속', { ...small, color: '#9fc4ff' }).setOrigin(0.5, 0);
+    // big number + small unit, bottom-aligned with a margin above the screen's lower edge
+    this.speedNum = this.add.text(0, 0, '-', { ...small, color: '#ffffff' }).setOrigin(0, 1).setScale(2);
+    this.speedUnit = this.add.text(0, 0, 'km/h', { ...small, color: '#cfd8ea' }).setOrigin(0, 1);
     this.layoutSpeed();
 
     this.makeParticles();
@@ -69,9 +69,9 @@ export default class Stadium extends Phaser.Scene {
     if (this.speedNum.displayWidth + gap + this.speedUnit.displayWidth > room) this.speedNum.setScale(1);
     const total = this.speedNum.displayWidth + gap + this.speedUnit.displayWidth;
     const x = Math.round((sb.x0 + sb.x1) / 2 - total / 2);
-    this.speedNum.setX(x);
-    this.speedUnit.setX(x + this.speedNum.displayWidth + gap)
-      .setY(this.speedNum.y + this.speedNum.displayHeight - this.speedUnit.displayHeight - 1);
+    const bottom = sb.y1 - 5;                       // keep a clear margin at the bottom
+    this.speedNum.setPosition(x, bottom);
+    this.speedUnit.setPosition(x + this.speedNum.displayWidth + gap, bottom - 2);
   }
 
   makeBallTexture() {

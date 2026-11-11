@@ -9,7 +9,7 @@ import { setSound, unlock } from './sound.js';
 const $ = id => document.getElementById(id);
 
 async function boot() {
-  await document.fonts.load('11px Galmuri11').catch(() => {});
+  await Promise.all(['11px Galmuri11', '9px Galmuri9'].map(f => document.fonts.load(f))).catch(() => {});
   const hadSave = load();
 
   const game = new Phaser.Game({
