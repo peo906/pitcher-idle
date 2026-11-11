@@ -1,0 +1,63 @@
+@import 'galmuri/dist/galmuri.css';
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: #0b0d12; color: #f2f2f2; font-family: 'Galmuri11', sans-serif; }
+
+/* 16:9 stage, as large as the window allows */
+#wrap {
+  position: relative;
+  width: min(100vw, calc(100vh * 16 / 9));
+  aspect-ratio: 16 / 9;
+  margin: 0 auto;
+  top: 50%;
+  transform: translateY(-50%);
+  overflow: hidden;
+}
+#game, #game canvas { width: 100% !important; height: 100% !important; display: block; image-rendering: pixelated; }
+
+#hud {
+  position: absolute; inset: 0 0 auto 0;
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 1.2% 1.6%;
+  pointer-events: none;
+  font-size: clamp(11px, 1.6vw, 22px);
+  text-shadow: 0 2px 0 #000, 2px 0 0 #000, -2px 0 0 #000, 0 -2px 0 #000;
+}
+#hud button { pointer-events: auto; }
+.hud-left #gold { font-weight: 700; font-size: 1.5em; color: #ffd84a; }
+.hud-left #rate { font-size: .8em; color: #cfe6ff; }
+.hud-center { text-align: center; }
+.hud-center #player { font-size: .75em; color: #dde; margin-top: 2px; }
+.hud-right { display: flex; gap: 6px; }
+.hud-right button {
+  font-family: inherit; font-size: .7em; padding: .4em .7em; border-radius: 8px; border: 2px solid #000;
+  background: rgba(20, 28, 48, .8); color: #fff; cursor: pointer;
+}
+
+.modal { position: absolute; inset: 0; background: rgba(0, 0, 0, .55); display: grid; place-items: center; }
+.modal[hidden] { display: none; }
+.panel {
+  width: min(92%, 460px); max-height: 92%; overflow: auto;
+  background: #16203a; border: 3px solid #000; box-shadow: 0 0 0 3px #3d5a9e inset;
+  border-radius: 10px; padding: 18px 20px; font-size: 14px;
+}
+.panel h2 { margin: 0 0 8px; font-size: 18px; color: #ffd84a; }
+.panel h3 { margin: 14px 0 4px; font-size: 14px; color: #9fc4ff; }
+.panel p { margin: 4px 0 10px; line-height: 1.5; }
+.panel .hint { color: #9aa6c2; font-size: 12px; }
+.panel .big { font-size: 26px; color: #ffd84a; text-align: center; margin: 6px 0 12px; }
+.panel input, .panel textarea {
+  width: 100%; font-family: inherit; font-size: 14px; color: #fff;
+  background: #0d1426; border: 2px solid #3d5a9e; border-radius: 6px; padding: 8px;
+}
+.panel textarea { resize: none; font-size: 11px; word-break: break-all; }
+.panel .line { display: flex; justify-content: space-between; align-items: center; margin: 8px 0; gap: 10px; }
+.panel .line input { width: 130px; }
+.panel .row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.panel .row.end { justify-content: flex-end; margin-top: 16px; }
+.panel button {
+  font-family: inherit; font-size: 14px; padding: 7px 14px; cursor: pointer;
+  background: #2a3a66; color: #fff; border: 2px solid #000; border-radius: 6px;
+}
+.panel button.primary { background: #e0a82e; color: #1a1205; }
+.panel button:hover { filter: brightness(1.12); }

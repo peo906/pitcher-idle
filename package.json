@@ -1,0 +1,21 @@
+{
+  "name": "pitcher-idle",
+  "version": "1.0.0",
+  "description": "포수 시점 방치형 투수 게임",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "galmuri": "^2.40.3",
+    "phaser": "^3.90.0"
+  },
+  "devDependencies": {
+    "vite": "^8.3.7"
+  },
+  "type": "module"
+}

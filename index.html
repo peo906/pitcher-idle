@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>방치형 투수</title>
+</head>
+<body>
+  <div id="wrap">
+    <div id="game"></div>
+
+    <div id="hud">
+      <div class="hud-left">
+        <div id="gold">0</div>
+        <div id="rate">+0/초</div>
+      </div>
+      <div class="hud-center">
+        <div id="stage">초등 1학년 · 연습</div>
+        <div id="player"></div>
+      </div>
+      <div class="hud-right">
+        <button id="btn-sound" title="사운드">소리</button>
+        <button id="btn-settings" title="설정">설정</button>
+      </div>
+    </div>
+
+    <!-- first start: player name -->
+    <div class="modal" id="modal-name" hidden>
+      <div class="panel">
+        <h2>투수 이름</h2>
+        <p>야구부에 들어온 걸 환영해! 이름을 알려줘.</p>
+        <input id="name-input" maxlength="8" placeholder="최대 8자" autocomplete="off" />
+        <div class="row"><button id="name-ok" class="primary">시작하기</button></div>
+      </div>
+    </div>
+
+    <!-- offline reward -->
+    <div class="modal" id="modal-offline" hidden>
+      <div class="panel">
+        <h2>다녀오셨어요!</h2>
+        <p id="offline-text"></p>
+        <div class="big" id="offline-gold"></div>
+        <div class="row"><button id="offline-ok" class="primary">받기</button></div>
+      </div>
+    </div>
+
+    <!-- settings -->
+    <div class="modal" id="modal-settings" hidden>
+      <div class="panel">
+        <h2>설정</h2>
+        <label class="line">사운드 <button id="set-sound"></button></label>
+        <label class="line">이름 <span><input id="set-name" maxlength="8" /> <button id="set-name-ok">변경</button></span></label>
+        <h3>저장 코드</h3>
+        <p class="hint">다른 브라우저나 PC에서 이어서 하려면 이 코드를 복사해 두세요.</p>
+        <textarea id="code-out" readonly rows="3"></textarea>
+        <div class="row"><button id="code-copy">코드 복사</button></div>
+        <h3>코드로 불러오기</h3>
+        <textarea id="code-in" rows="3" placeholder="저장 코드를 붙여넣으세요"></textarea>
+        <div class="row"><button id="code-load">불러오기</button> <span id="code-msg" class="hint"></span></div>
+        <div class="row end"><button id="settings-close" class="primary">닫기</button></div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
