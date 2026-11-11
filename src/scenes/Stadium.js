@@ -4,7 +4,7 @@ import { W, H, MULT, PITCH, ANCHOR, MISS, speedKmh, interval, zoneChance, goldMu
 import { stage, buffMult, examReady, passExam } from '../economy.js';
 import { Match } from '../match.js';
 import { pickPitch, mods as pitchMods, kmhFor } from '../arsenal.js';
-import { PITCH_BY_ID } from '../config.js';
+import { PITCH_BY_ID, BREAK, flightFor } from '../config.js';
 import { drawPixelText, textWidth } from '../pixelfont.js';
 import { save } from '../state.js';
 import { state, addGold } from '../state.js';
@@ -55,6 +55,7 @@ export default class Stadium extends Phaser.Scene {
     const z = ANCHOR.zone;
     this.zoneGfx = this.add.graphics().lineStyle(1, 0xffffff, 0.22).strokeRect(z.x0 + 0.5, z.y0 + 0.5, z.x1 - z.x0, z.y1 - z.y0);
 
+    this.trail = this.add.graphics();                       // short afterimage so the break is readable
     this.ball = this.add.image(0, 0, this.makeBallTexture()).setVisible(false);
     this.mitt = this.add.sprite(ANCHOR.mittRest.x, ANCHOR.mittRest.y, 'mitt', 0);
 
@@ -354,7 +355,6 @@ export default class Stadium extends Phaser.Scene {
     if (!this.match && STAGE_GAUGE[state.stage] === 0) this.startGame();               // reached pro: games only
     if (!this.match && this.pendingGame) { this.pendingGame = false; state.gauge = 0; this.startGame(); }
     const T = interval(state.lv.tempo);
-    const windup = Math.max(PITCH.minWindup, T - PITCH.flight - PITCH.react);
 
     let isStrike, out = null, miss = null;
     const lefty = this.match && this.match.lefty;          // the batter at the plate now (pitch() may roll the next one)
@@ -362,6 +362,8 @@ export default class Stadium extends Phaser.Scene {
     const ptId = this.forcePitch || pickPitch(this.match ? this.match.strikes : 0); this.forcePitch = null;
     const pt = pitchMods(ptId);
     this.curPitch = ptId; this.curKmh = kmhFor(ptId) + Phaser.Math.Between(-2, 2);
+    const flight = flightFor(ptId); this.curFlight = flight;
+    const windup = Math.max(PITCH.minWindup, T - flight - PITCH.react);
     if (this.match) { out = this.match.pitch(state.lv, this.forceNext, pt); this.forceNext = null; isStrike = out.inZone; miss = out.miss; }
     else {
       miss = Math.random() < missChance(state.lv.control) ? (Math.random() < MISS.wideShare ? 'wide' : 'middle') : null;
@@ -416,36 +418,47 @@ export default class Stadium extends Phaser.Scene {
 
   release(target, isStrike, out, miss = null) {
     sfx('whoosh');
+    const flightMs = (this.curFlight || PITCH.flight) * 1000;
     if (miss) {
       this.time.delayedCall(40, () => this.missReaction());
       // catcher lunges late; on a wild pitch he gets there a beat too slow
       const reach = out && out.end === 'hbp' ? { x: (target.x + 240) / 2, y: target.y + 10 }
         : out && out.wild ? { x: target.x + (target.x < 240 ? 14 : -14), y: target.y - 6 } : target;
-      this.tweens.add({ targets: this.mitt, x: reach.x, y: reach.y, delay: PITCH.flight * 1000 * 0.45,
-        duration: PITCH.flight * 1000 * 0.55, ease: 'Quad.easeOut' });
+      this.tweens.add({ targets: this.mitt, x: reach.x, y: reach.y, delay: flightMs * 0.45,
+        duration: flightMs * 0.55, ease: 'Quad.easeOut' });
     }
-    if (out && out.swing) this.time.delayedCall(PITCH.flight * 1000 * 0.55, () => this.swing());
+    if (out && out.swing) this.time.delayedCall(flightMs * 0.6, () => this.swing());
     const from = ANCHOR.release;
     const b = this.ball.setVisible(true).setPosition(from.x, from.y).setScale(0.25);
     const p = { t: 0 };
+    const br = BREAK[this.curPitch] || BREAK.fastball, trail = [];
     // strike three: the last stretch plays in slow motion, the screen dims, then everything hits at once
     const isK = out && (out.end === 'k' || out.end === 'k3');
     const slowEase = t => (t < 0.35 ? Math.pow(t / 0.35, 2) * 0.62 : 0.62 + 0.38 * Math.pow((t - 0.35) / 0.65, 1.4));
+    // out-in: quick out of the hand, hangs in the middle so the break reads, then snaps into the mitt
+    const outIn = t => (t < 0.5 ? 0.5 * (1 - Math.pow(1 - 2 * t, 2)) : 0.5 + 0.5 * Math.pow(2 * t - 1, 2));
     if (isK) {
-      this.time.delayedCall(PITCH.flight * 1000 * 0.5, () => {
+      this.time.delayedCall(flightMs * 0.5, () => {
         this.dim.setAlpha(0);
         this.tweens.add({ targets: this.dim, alpha: out.end === 'k3' ? 0.45 : 0.35, duration: 180 });
       });
     }
     this.tweens.add({
-      targets: p, t: 1, duration: PITCH.flight * 1000 * (isK ? 2.4 : 1), ease: isK ? slowEase : 'Quad.easeIn',
+      targets: p, t: 1, duration: flightMs * (isK ? 2.2 : 1.25), ease: isK ? slowEase : outIn,
       onUpdate: () => {
-        const t = p.t;
-        b.x = from.x + (target.x - from.x) * t;
-        b.y = from.y + (target.y - from.y) * t - 10 * Math.sin(Math.PI * t) * 0.4;   // slight carry
+        const t = p.t, f = Math.sin(Math.PI * Math.pow(t, br.k));
+        let ox = br.dx * f, oy = br.dy * f;
+        if (br.wobble) { const w = Math.sin(Math.PI * t); ox += br.wobble * Math.sin(t * 31) * w; oy += br.wobble * 0.7 * Math.sin(t * 23 + 1) * w; }
+        b.x = from.x + (target.x - from.x) * t + ox;
+        b.y = from.y + (target.y - from.y) * t + oy;
         b.setScale(0.25 + 1.15 * t);
+        b.setAngle(t * (this.curPitch === 'gyro' ? 1440 : 540));
+        trail.push([b.x, b.y, b.scale]); if (trail.length > 9) trail.shift();
+        this.trail.clear();
+        trail.forEach(([x, y, sc], i) => this.trail.fillStyle(0xffffff, 0.06 + 0.05 * i).fillCircle(x, y, 4 * sc * (0.5 + i / 18)));
       },
       onComplete: () => {
+        b.setAngle(0); this.trail.clear();
         if (out && out.wild) this.wildPitch(target, out);
         else if (out && out.end === 'hbp') this.hitByPitch(target, out);
         else if (out && (out.call === 'foul' || out.call === 'inplay')) this.contact(target, out);
@@ -656,7 +669,7 @@ export default class Stadium extends Phaser.Scene {
     if (this.speedLabel) this.speedLabel.setVisible(!inGame);
     if (!inGame) { this.hideBoardLabels(); return; }
     this.boardTop.setText(`${m.inning}회   ${m.teamRuns} : ${m.runs}`);
-    this.boardSpeed.setText(this.lastKmh ? `${PITCH_BY_ID[this.lastPitch || 'fastball'].name} ${this.lastKmh}km/h` : '');
+    this.boardSpeed.setText(this.lastKmh ? `${PITCH_BY_ID[this.lastPitch || 'fastball'].abbr} ${this.lastKmh}km/h` : '');
     const row = (y, n, lit, color, label) => {
       this.boardLabels = this.boardLabels || {};
       const x0 = sb.x0 + 8;
@@ -742,6 +755,9 @@ export default class Stadium extends Phaser.Scene {
     if (t && !this.inBreak && !this.playing && t.getRemaining() > 400) { t.remove(false); this.nextPitch = this.time.delayedCall(300, () => this.pitch()); }
   }
   adminPitch(id) { this.forcePitch = id; }
+  previewPitch(id, target = { x: 240, y: 208 }) {   // throw one pitch of this type at a fixed spot (trajectory check)
+    this.curPitch = id; this.curFlight = flightFor(id); this.release(target, true, null, null);
+  }
   adminMood(kind) {
     const m = this.match; if (!m) return;
     if (kind === 'shrink') { m.shrink = 15; m.outStreak = 0; } else { m.shrink = 0; m.outStreak = 3; }

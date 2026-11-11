@@ -86,7 +86,7 @@ export const MULT = { strike: 1.1, ball: 1.0 };
 
 // pitch timing (seconds). flight is fixed so the "pop" always lands the same way.
 export const PITCH = {
-  flight: 0.25,
+  flight: 0.32,                         // base (fastball) flight; off-speed pitches take longer
   react: 0.2,
   minWindup: 0.15,
 };
@@ -112,20 +112,20 @@ export const ANCHOR = {
 // Effects apply only to the pitch that is thrown (%p): zone = more strikes, whiff = batter misses more,
 // hit / hr = fewer hits / home runs (negative). speed = share of fastball velocity shown on the gun.
 export const PITCHES = [
-  { id: 'fastball',     name: '직구',          stage: 0,  speed: 1.00, fx: {} },
-  { id: 'curve',        name: '커브',          stage: 2,  speed: 0.75, fx: { whiff: 9, zone: -6 } },
-  { id: 'changeup',     name: '체인지업',      stage: 4,  speed: 0.82, fx: { hit: -5, whiff: 2 } },
-  { id: 'slider',       name: '슬라이더',      stage: 5,  speed: 0.88, fx: { whiff: 6, hit: -3, zone: -3 } },
-  { id: 'twoseam',      name: '투심',          stage: 6,  speed: 0.97, fx: { hit: -2, hr: -5 } },
-  { id: 'cutter',       name: '커터',          stage: 7,  speed: 0.93, fx: { hr: -5, zone: 2 } },
-  { id: 'sinker',       name: '싱커',          stage: 8,  speed: 0.95, fx: { hit: -5, whiff: -4 } },
-  { id: 'splitter',     name: '스플리터',      stage: 9,  speed: 0.88, fx: { whiff: 9, zone: -6 } },
-  { id: 'knucklecurve', name: '너클 커브',     stage: 10, speed: 0.78, fx: { whiff: 12, zone: -9 } },
-  { id: 'fork',         name: '포크',          stage: 11, speed: 0.85, fx: { whiff: 15, hit: -3, zone: -9 } },
-  { id: 'sweeper',      name: '스위퍼',        stage: 12, speed: 0.86, fx: { whiff: 12, hit: -3 } },
-  { id: 'circlechange', name: '서클 체인지업', stage: 13, speed: 0.82, fx: { hit: -8, zone: -3 } },
-  { id: 'knuckleball',  name: '너클볼',        stage: 15, speed: 0.70, fx: { whiff: 18, zone: -18 } },
-  { id: 'gyro',         name: '자이로볼',      stage: 16, speed: 1.00, fx: { whiff: 9, hr: -3 } },
+  { id: 'fastball', abbr: 'FB',     name: '직구',          stage: 0,  speed: 1.00, fx: {} },
+  { id: 'curve', abbr: 'CB',        name: '커브',          stage: 2,  speed: 0.75, fx: { whiff: 9, zone: -6 } },
+  { id: 'changeup', abbr: 'CH',     name: '체인지업',      stage: 4,  speed: 0.82, fx: { hit: -5, whiff: 2 } },
+  { id: 'slider', abbr: 'SL',       name: '슬라이더',      stage: 5,  speed: 0.88, fx: { whiff: 6, hit: -3, zone: -3 } },
+  { id: 'twoseam', abbr: '2S',      name: '투심',          stage: 6,  speed: 0.97, fx: { hit: -2, hr: -5 } },
+  { id: 'cutter', abbr: 'CT',       name: '커터',          stage: 7,  speed: 0.93, fx: { hr: -5, zone: 2 } },
+  { id: 'sinker', abbr: 'SK',       name: '싱커',          stage: 8,  speed: 0.95, fx: { hit: -5, whiff: -4 } },
+  { id: 'splitter', abbr: 'SP',     name: '스플리터',      stage: 9,  speed: 0.88, fx: { whiff: 9, zone: -6 } },
+  { id: 'knucklecurve', abbr: 'KC', name: '너클 커브',     stage: 10, speed: 0.78, fx: { whiff: 12, zone: -9 } },
+  { id: 'fork', abbr: 'FK',         name: '포크',          stage: 11, speed: 0.85, fx: { whiff: 15, hit: -3, zone: -9 } },
+  { id: 'sweeper', abbr: 'SW',      name: '스위퍼',        stage: 12, speed: 0.86, fx: { whiff: 12, hit: -3 } },
+  { id: 'circlechange', abbr: 'CC', name: '서클 체인지업', stage: 13, speed: 0.82, fx: { hit: -8, zone: -3 } },
+  { id: 'knuckleball', abbr: 'KN',  name: '너클볼',        stage: 15, speed: 0.70, fx: { whiff: 18, zone: -18 } },
+  { id: 'gyro', abbr: 'GY',         name: '자이로볼',      stage: 16, speed: 1.00, fx: { whiff: 9, hr: -3 } },
 ];
 export const PITCH_BY_ID = Object.fromEntries(PITCHES.map(p => [p.id, p]));
 export const PITCH_UNLOCK_SHARE = 0.3;                      // unlock cost = 30% of that stage's promotion cost
@@ -143,3 +143,26 @@ export const COMBOS = [
   { id: 'power',  name: '정통파',    desc: '슬롯 3칸 이상에서 변화구 2개 이하', fx: { zone: 3, hr: -1 },
     test: (eq, slots) => slots >= 3 && eq.length <= 2 },
 ];
+
+// ---------------- 구종별 궤적 (catcher's view, right-handed pitcher) ----------------
+// The ball always lands on the target; during flight it is pushed off the straight line by
+// dx/dy (px) times a bell f(t) = sin(pi * t^k). Bigger k = the break shows up later and sharper.
+// dx > 0: ball sits to the catcher's right and breaks back left (slider/sweeper/cutter, glove side)
+// dx < 0: arm-side run (changeup, two-seam, sinker).  dy < 0: ball rides high, then drops in.
+export const BREAK = {
+  fastball:     { dx: 0,   dy: -7,  k: 1.2 },            // a little carry
+  curve:        { dx: 8,   dy: -64, k: 1.4 },             // pops up out of the hand, then rolls down
+  changeup:     { dx: -16, dy: -34, k: 3.0 },
+  slider:       { dx: 34,  dy: -10, k: 3.0 },
+  twoseam:      { dx: -18, dy: -10, k: 3.2 },
+  cutter:       { dx: 14,  dy: -5,  k: 4.0 },
+  sinker:       { dx: -14, dy: -38, k: 3.2 },
+  splitter:     { dx: 0,   dy: -54, k: 3.6 },            // comes in level like a fastball, then dives
+  knucklecurve: { dx: 10,  dy: -78, k: 1.8 },
+  fork:         { dx: 0,   dy: -68, k: 4.0 },
+  sweeper:      { dx: 56,  dy: -8,  k: 2.4 },
+  circlechange: { dx: -20, dy: -38, k: 3.0 },
+  knuckleball:  { dx: 0,   dy: -10, k: 1.0, wobble: 12 },
+  gyro:         { dx: 0,   dy: -4,  k: 1.2 },
+};
+export const flightFor = id => PITCH.flight / Math.max(0.7, PITCH_BY_ID[id].speed) * (id === 'gyro' ? 0.85 : 1);
