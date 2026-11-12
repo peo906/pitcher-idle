@@ -4,7 +4,7 @@ import { W, H, MULT, PITCH, ANCHOR, MISS, speedKmh, interval, zoneChance, goldMu
 import { stage, buffMult, examReady, passExam } from '../economy.js';
 import { Match } from '../match.js';
 import { pickPitch, mods as pitchMods, kmhFor } from '../arsenal.js';
-import { PITCH_BY_ID, BREAK, flightFor, breakEase, PITCH_FAMILY, FAMILY_COLOR, THROW } from '../config.js';
+import { PITCH_BY_ID, BREAK, flightFor, breakEase, PITCH_FAMILY, FAMILY_COLOR, THROW, CELEBRATE } from '../config.js';
 import { drawPixelText, textWidth } from '../pixelfont.js';
 import { save } from '../state.js';
 import { state, addGold } from '../state.js';
@@ -25,7 +25,7 @@ export default class Stadium extends Phaser.Scene {
     this.load.image('clouds', a + 'clouds.png');
     for (const k of ['pro', 'elementary'])
       this.load.spritesheet('pitcher_' + k, a + `pitcher_${k}_idle.png`, { frameWidth: 64, frameHeight: 64 });
-    for (const t of Object.values(THROW)) this.load.spritesheet(t.key, a + t.file, { frameWidth: t.w, frameHeight: t.h });
+    for (const t of [...Object.values(THROW), ...Object.values(CELEBRATE)]) this.load.spritesheet(t.key, a + t.file, { frameWidth: t.w, frameHeight: t.h });
     this.load.spritesheet('mitt', a + 'mitt.png', { frameWidth: 40, frameHeight: 32 });
     this.load.image('emoteMiss', a + 'emote_miss.png');
     this.load.json('crowd', a + 'crowd.json');
@@ -285,10 +285,12 @@ export default class Stadium extends Phaser.Scene {
     k.lineStyle(2, 0xffe14a, 1).strokeRect(z.x0, z.y0, z.x1 - z.x0, z.y1 - z.y0);
     drawPixelText(k, 'K', (z.x0 + z.x1) / 2 - 9, (z.y0 + z.y1) / 2 - 14, 0xffe14a, 4);
     this.tweens.add({ targets: k, alpha: { from: 1, to: 0 }, delay: 600, duration: 300, onComplete: () => k.destroy() });
-    // pitcher hops
-    const y0 = this.pitcherY;
-    this.tweens.add({ targets: this.pitcher, y: y0 - (k3 ? 7 : 5), duration: 120, yoyo: true, repeat: k3 ? 2 : 1, ease: 'Quad.easeOut',
-      onComplete: () => { this.pitcher.y = y0; } });
+    // pitcher: fist-pump celebration if we have the art, else a happy hop
+    if (!this.celebrate()) {
+      const y0 = this.pitcherY;
+      this.tweens.add({ targets: this.pitcher, y: y0 - (k3 ? 7 : 5), duration: 120, yoyo: true, repeat: k3 ? 2 : 1, ease: 'Quad.easeOut',
+        onComplete: () => { this.pitcher.y = y0; } });
+    }
   }
 
   fxOut(kind) {
@@ -790,8 +792,11 @@ export default class Stadium extends Phaser.Scene {
       return;
     }
     const th = this.thrower;
+    if (this.celebrateTween) { this.celebrateTween.stop(); this.celebrateTween = null; }
+    this.celebrating = false;
     this.pitcher.setVisible(false);
-    th.setVisible(true).setFrame(0).setScale(1).setPosition(ANCHOR.mound.x, ANCHOR.mound.feet);
+    th.setTexture(t.key, 0).setOrigin(t.cx / t.w, t.feet / t.h)
+      .setVisible(true).setScale(1).setPosition(ANCHOR.mound.x, ANCHOR.mound.feet);
     const prog = { f: 0 }, last = t.release;
     this.tweens.add({ targets: prog, f: last + 0.999, duration: ms, ease: 'Linear',
       onUpdate: () => {
@@ -817,9 +822,29 @@ export default class Stadium extends Phaser.Scene {
   endThrow() {                          // back to the idle sprite once the ball arrives
     if (!this.thrower.visible) return;
     this.time.delayedCall(120, () => {
+      if (this.celebrating) return;     // the strikeout celebration owns the sprite now
       this.thrower.setVisible(false).setScale(1);
       this.pitcher.setVisible(true).setScale(1).setPosition(ANCHOR.mound.x, this.pitcherY);
     });
+  }
+
+  // 삼진 세리머니: plays the fist-pump strip if this pitcher has one, else returns false
+  celebrate() {
+    const c = CELEBRATE[stage().sprite];
+    if (!c) return false;
+    const th = this.thrower;
+    this.celebrating = true;
+    this.pitcher.setVisible(false);
+    th.setTexture(c.key, 0).setOrigin(c.cx / c.w, c.feet / c.h).setScale(1).setVisible(true)
+      .setPosition(ANCHOR.mound.x, ANCHOR.mound.feet);
+    const prog = { f: 0 };
+    this.celebrateTween = this.tweens.add({ targets: prog, f: c.frames - 0.001, duration: c.ms,
+      onUpdate: () => { if (this.celebrating) th.setFrame(Math.floor(prog.f)); },
+      onComplete: () => {
+        this.celebrating = false; this.celebrateTween = null;
+        th.setVisible(false); this.pitcher.setVisible(true).setScale(1).setPosition(ANCHOR.mound.x, this.pitcherY);
+      } });
+    return true;
   }
 
   pitchLabel(name, col, flightMs) {     // the pitch name pops out by the pitcher's hand as it is released
@@ -849,7 +874,10 @@ export default class Stadium extends Phaser.Scene {
   applyPitcherArt() {
     const key = stage().sprite, meta = this.cache.json.get('sprites')['pitcher_' + key];
     this.throwDef = THROW[key] || null;
+    if (this.celebrateTween) { this.celebrateTween.stop(); this.celebrateTween = null; }
+    this.celebrating = false;
     this.thrower.setVisible(false);
+    this.pitcher.setVisible(true);
     if (this.throwDef) this.thrower.setTexture(this.throwDef.key, 0)
       .setOrigin(this.throwDef.cx / this.throwDef.w, this.throwDef.feet / this.throwDef.h).setPosition(ANCHOR.mound.x, ANCHOR.mound.feet);
     this.breatheKey = 'breathe_' + key;

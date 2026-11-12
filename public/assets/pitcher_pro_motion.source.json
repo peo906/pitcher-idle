@@ -1,0 +1,61 @@
+{
+  "character": {
+    "id": "427c8670-bd59-48ab-ad54-270aec7bfc02",
+    "name": "Idle",
+    "prompt": "Chibi baseball pitcher, 3 heads tall, large head about 33% of total height, slightly longer body and limbs than a toddler chibi, young adult pro player look, friendly calm face, gentle confident smile, bright clear eyes, no rosy cheeks. Right-handed. White home uniform with navy trim, navy baseball cap, black glove on left hand, baseball in right hand, navy socks, black cleats. Chunky pixel shapes, bold readable silhouette, cheerful mobile baseball game style.",
+    "size": {
+      "width": 64,
+      "height": 64
+    },
+    "directions": 8,
+    "view": "side"
+  },
+  "spritesheet": {
+    "path": "Chibi_baseball_pitcher_3-Idle.png",
+    "cell_size": {
+      "width": 92,
+      "height": 88
+    },
+    "sheet_size": {
+      "width": 1564,
+      "height": 264
+    },
+    "columns": 17,
+    "pivot": "cell-center",
+    "rows": [
+      {
+        "row": 0,
+        "type": "rotations",
+        "frame_count": 8,
+        "directions": [
+          "south",
+          "south-east",
+          "east",
+          "north-east",
+          "north",
+          "north-west",
+          "west",
+          "south-west"
+        ]
+      },
+      {
+        "row": 1,
+        "type": "animation",
+        "frame_count": 17,
+        "animation": "Overhand baseball pitch thrown straight toward the viewer. Starts in set position holding the ball in the glove at chest height, lifts the front leg high, strides forward, the right arm comes over the top and releases the ball toward the camera, then follows through bending forward, and returns to a ready stance.",
+        "animation_group_id": "2c9f4d85-9e1a-424d-a682-f7b91c3ee605",
+        "direction": "south"
+      },
+      {
+        "row": 2,
+        "type": "animation",
+        "frame_count": 17,
+        "animation": "Excited strikeout celebration facing the viewer: pumps the right fist down hard while shouting, small hop, then a confident fist hold at chest height.",
+        "animation_group_id": "9c6c3dae-85e1-4f37-a4ea-1f9340c89373",
+        "direction": "south"
+      }
+    ]
+  },
+  "export_version": "1.0",
+  "export_date": "2026-11-12T00:14:22.182318+00:00"
+}

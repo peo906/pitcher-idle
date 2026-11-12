@@ -185,4 +185,10 @@ export const FAMILY_COLOR = { fast: 0xffffff, slide: 0xffd23c, drop: 0x5aa8ff, f
 export const THROW = {
   elementary: { key: 'throw_elementary', file: 'pitcher_elementary_throw.png', w: 68, h: 124,
     release: 11, follow: [13, 14, 15, 16], legLift: [3, 8], ball: { x: 16.2, y: 35.3 }, feet: 93, cx: 32.5 },
+  pro: { key: 'throw_pro', file: 'pitcher_pro_throw.png', w: 92, h: 88,
+    release: 9, follow: [10, 11, 12, 13, 14, 15], legLift: [4, 8], ball: { x: 30, y: 20 }, feet: 75, cx: 45.5 },
+};
+// 삼진 세리머니 (fist pump), played on the strikeout catch
+export const CELEBRATE = {
+  pro: { key: 'celebrate_pro', file: 'pitcher_pro_celebrate.png', w: 92, h: 88, frames: 17, ms: 1300, feet: 75, cx: 45.5 },
 };
