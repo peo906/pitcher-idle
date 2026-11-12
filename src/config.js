@@ -178,3 +178,11 @@ export const PITCH_FAMILY = {
   knuckleball: 'knuckle',
 };
 export const FAMILY_COLOR = { fast: 0xffffff, slide: 0xffd23c, drop: 0x5aa8ff, fade: 0xff8a4a, knuckle: 0xd07aff };
+
+// ---------------- 투구 모션 (PixelLab, south) ----------------
+// frames: windup plays 0..release, release frame hands the ball off, follow-through plays during the flight.
+// ball/feet/cx are in frame pixels; the frame is placed so (cx, feet) sits on the mound.
+export const THROW = {
+  elementary: { key: 'throw_elementary', file: 'pitcher_elementary_throw.png', w: 68, h: 124,
+    release: 11, follow: [13, 14, 15, 16], legLift: [3, 8], ball: { x: 16.2, y: 35.3 }, feet: 93, cx: 32.5 },
+};

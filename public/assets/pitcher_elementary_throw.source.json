@@ -1,0 +1,53 @@
+{
+  "character": {
+    "id": "4df8e881-8847-4d57-bea3-910577c92e15",
+    "name": "Idle",
+    "prompt": "Cute chibi super-deformed baseball pitcher, 2.5 heads tall, very large round head about 40% of total height, small short body with stubby arms and legs, big shiny eyes, round face with rosy cheeks, confident cheerful smile. Right-handed. White home uniform with navy trim, navy baseball cap slightly oversized, black glove on left hand, baseball in right hand, navy socks, black cleats. Simple chunky shapes, soft cel shading, bright cheerful colors, mobile baseball game mascot style, clean readable silhouette.",
+    "size": {
+      "width": 64,
+      "height": 64
+    },
+    "directions": 8,
+    "view": "side"
+  },
+  "spritesheet": {
+    "path": "Cute_chibi_super-deforme-Idle.png",
+    "cell_size": {
+      "width": 68,
+      "height": 124
+    },
+    "sheet_size": {
+      "width": 1156,
+      "height": 248
+    },
+    "columns": 17,
+    "pivot": "cell-center",
+    "rows": [
+      {
+        "row": 0,
+        "type": "rotations",
+        "frame_count": 8,
+        "directions": [
+          "south",
+          "south-east",
+          "east",
+          "north-east",
+          "north",
+          "north-west",
+          "west",
+          "south-west"
+        ]
+      },
+      {
+        "row": 1,
+        "type": "animation",
+        "frame_count": 17,
+        "animation": "Overhand baseball pitch thrown straight toward the viewer. Starts in set position holding the ball in the glove at chest height, lifts the front leg high, strides forward, the right arm comes over the top and releases the ball toward the camera, then follows through bending forward, and returns to a ready stance.",
+        "animation_group_id": "84aeb390-c561-47e4-95eb-5d49eda1fc12",
+        "direction": "south"
+      }
+    ]
+  },
+  "export_version": "1.0",
+  "export_date": "2026-11-12T00:03:55.732626+00:00"
+}

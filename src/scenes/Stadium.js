@@ -4,7 +4,7 @@ import { W, H, MULT, PITCH, ANCHOR, MISS, speedKmh, interval, zoneChance, goldMu
 import { stage, buffMult, examReady, passExam } from '../economy.js';
 import { Match } from '../match.js';
 import { pickPitch, mods as pitchMods, kmhFor } from '../arsenal.js';
-import { PITCH_BY_ID, BREAK, flightFor, breakEase, PITCH_FAMILY, FAMILY_COLOR } from '../config.js';
+import { PITCH_BY_ID, BREAK, flightFor, breakEase, PITCH_FAMILY, FAMILY_COLOR, THROW } from '../config.js';
 import { drawPixelText, textWidth } from '../pixelfont.js';
 import { save } from '../state.js';
 import { state, addGold } from '../state.js';
@@ -25,6 +25,7 @@ export default class Stadium extends Phaser.Scene {
     this.load.image('clouds', a + 'clouds.png');
     for (const k of ['pro', 'elementary'])
       this.load.spritesheet('pitcher_' + k, a + `pitcher_${k}_idle.png`, { frameWidth: 64, frameHeight: 64 });
+    for (const t of Object.values(THROW)) this.load.spritesheet(t.key, a + t.file, { frameWidth: t.w, frameHeight: t.h });
     this.load.spritesheet('mitt', a + 'mitt.png', { frameWidth: 40, frameHeight: 32 });
     this.load.image('emoteMiss', a + 'emote_miss.png');
     this.load.json('crowd', a + 'crowd.json');
@@ -48,6 +49,7 @@ export default class Stadium extends Phaser.Scene {
     for (const k of ['pro', 'elementary'])
       this.anims.create({ key: 'breathe_' + k, frames: this.anims.generateFrameNumbers('pitcher_' + k, { start: 0, end: 1 }), frameRate: 1.2, repeat: -1 });
     this.pitcher = this.add.sprite(0, 0, 'pitcher_pro', 0);
+    this.thrower = this.add.sprite(ANCHOR.mound.x, ANCHOR.mound.feet, '__DEFAULT').setVisible(false);   // pitching motion, swapped in for the idle sprite
     this.applyPitcherArt();
     window.addEventListener('stage-change', () => this.onPromoted());
 
@@ -167,7 +169,8 @@ export default class Stadium extends Phaser.Scene {
     this.tweens.add({ targets: this.emote, y: hy - 2, duration: 110, yoyo: true, repeat: 2, delay: 140 });
     this.tweens.add({ targets: this.emote, alpha: 0, delay: 800, duration: 200, onComplete: () => this.emote.setVisible(false) });
     const x0 = this.pitcher.x;
-    this.tweens.add({ targets: p, x: { from: x0 - 1, to: x0 + 1 }, duration: 60, yoyo: true, repeat: 3, onComplete: () => { p.x = x0; } });
+    this.tweens.add({ targets: [p, this.thrower], x: { from: x0 - 1, to: x0 + 1 }, duration: 60, yoyo: true, repeat: 3,
+      onComplete: () => { p.x = x0; this.thrower.x = x0; } });
     sfx('oops');
   }
 
@@ -376,11 +379,7 @@ export default class Stadium extends Phaser.Scene {
 
     this.mitt.setFrame(0);
     this.tweens.add({ targets: this.mitt, x: call.x, y: call.y, duration: Math.min(220, windup * 800), ease: 'Sine.easeOut' });
-    this.pitcher.stop();
-    this.tweens.add({
-      targets: this.pitcher, y: this.pitcherY + 2, duration: windup * 1000 * 0.8,
-      onComplete: () => { this.pitcher.y = this.pitcherY; this.release(target, isStrike, out, miss); },
-    });
+    this.windupMotion(windup, () => this.release(target, isStrike, out, miss));
 
     // after a ball in play / end of game, give the play time to finish
     let wait = T;
@@ -428,7 +427,7 @@ export default class Stadium extends Phaser.Scene {
         duration: flightMs * 0.55, ease: 'Quad.easeOut' });
     }
     if (out && out.swing) this.time.delayedCall(flightMs * 0.6, () => this.swing());
-    const from = ANCHOR.release;
+    const from = this.releasePoint();
     const b = this.ball.setVisible(true).setPosition(from.x, from.y).setScale(0.32);
     const p = { t: 0 };
     const br = BREAK[this.curPitch] || BREAK.fastball, trail = [];
@@ -472,7 +471,7 @@ export default class Stadium extends Phaser.Scene {
         }
       },
       onComplete: () => {
-        b.setAngle(0); this.trail.clear();
+        b.setAngle(0); this.trail.clear(); this.endThrow();
         if (out && out.wild) this.wildPitch(target, out);
         else if (out && out.end === 'hbp') this.hitByPitch(target, out);
         else if (out && (out.call === 'foul' || out.call === 'inplay')) this.contact(target, out);
@@ -769,8 +768,62 @@ export default class Stadium extends Phaser.Scene {
     if (t && !this.inBreak && !this.playing && t.getRemaining() > 400) { t.remove(false); this.nextPitch = this.time.delayedCall(300, () => this.pitch()); }
   }
   adminPitch(id) { this.forcePitch = id; }
+  // ---------------- pitching motion ----------------
+  releasePoint() {                      // where the ball leaves the hand
+    const t = this.throwDef;
+    if (!t) return ANCHOR.release;
+    return { x: ANCHOR.mound.x + (t.ball.x - t.cx), y: ANCHOR.mound.feet - (t.feet - t.ball.y) };
+  }
+
+  windupMotion(windup, onRelease) {
+    const t = this.throwDef, ms = windup * 1000;
+    this.pitcher.stop();
+    if (!t) {
+      // no motion art yet: crouch, then spring up and lean in as the ball goes
+      const p = this.pitcher;
+      this.tweens.add({ targets: p, y: this.pitcherY + 2, scaleY: 0.94, scaleX: 1.03, duration: ms * 0.8, ease: 'Sine.easeInOut',
+        onComplete: () => {
+          p.y = this.pitcherY; p.setScale(0.93, 1.08);
+          this.tweens.add({ targets: p, scaleX: 1, scaleY: 1, duration: 200, ease: 'Back.easeOut' });
+          onRelease();
+        } });
+      return;
+    }
+    const th = this.thrower;
+    this.pitcher.setVisible(false);
+    th.setVisible(true).setFrame(0).setScale(1).setPosition(ANCHOR.mound.x, ANCHOR.mound.feet);
+    const prog = { f: 0 }, last = t.release;
+    this.tweens.add({ targets: prog, f: last + 0.999, duration: ms, ease: 'Linear',
+      onUpdate: () => {
+        const f = Math.floor(prog.f); th.setFrame(f);
+        // stretch a little while the leg is up, coil just before release
+        const [a, b] = t.legLift;
+        const lift = f >= a && f <= b ? Math.sin(Math.PI * (f - a + 1) / (b - a + 2)) : 0;
+        const coil = f >= last - 1 ? 1 : 0;
+        th.setScale(1 - 0.03 * lift + 0.05 * coil, 1 + 0.06 * lift - 0.06 * coil);
+      },
+      onComplete: () => {
+        // release: snap forward, then spring back while the follow-through plays during the flight
+        th.setScale(1.1, 0.9).setY(ANCHOR.mound.feet + 2);
+        this.tweens.add({ targets: th, scaleX: 1, scaleY: 1, y: ANCHOR.mound.feet, duration: 220, ease: 'Back.easeOut' });
+        const follow = { i: 0 }, flightMs = (this.curFlight || 0.32) * 1000;
+        th.setFrame(t.follow[0]);
+        this.tweens.add({ targets: follow, i: t.follow.length - 0.001, duration: flightMs * 1.1,
+          onUpdate: () => { if (th.visible) th.setFrame(t.follow[Math.floor(follow.i)]); } });
+        onRelease();
+      } });
+  }
+
+  endThrow() {                          // back to the idle sprite once the ball arrives
+    if (!this.thrower.visible) return;
+    this.time.delayedCall(120, () => {
+      this.thrower.setVisible(false).setScale(1);
+      this.pitcher.setVisible(true).setScale(1).setPosition(ANCHOR.mound.x, this.pitcherY);
+    });
+  }
+
   pitchLabel(name, col, flightMs) {     // the pitch name pops out by the pitcher's hand as it is released
-    const r = ANCHOR.release;
+    const r = this.releasePoint();
     const t = this.add.text(r.x + 16, r.y - 12, name, { fontFamily: 'Galmuri11', fontSize: '11px',
       color: '#' + col.toString(16).padStart(6, '0'), stroke: '#000', strokeThickness: 2,
       backgroundColor: 'rgba(8,12,24,0.72)', padding: { x: 3, y: 1 } }).setOrigin(0, 0.5).setScale(0.6);
@@ -795,6 +848,10 @@ export default class Stadium extends Phaser.Scene {
 
   applyPitcherArt() {
     const key = stage().sprite, meta = this.cache.json.get('sprites')['pitcher_' + key];
+    this.throwDef = THROW[key] || null;
+    this.thrower.setVisible(false);
+    if (this.throwDef) this.thrower.setTexture(this.throwDef.key, 0)
+      .setOrigin(this.throwDef.cx / this.throwDef.w, this.throwDef.feet / this.throwDef.h).setPosition(ANCHOR.mound.x, ANCHOR.mound.feet);
     this.breatheKey = 'breathe_' + key;
     this.pitcher.setTexture('pitcher_' + key, 0).setOrigin(meta.originX, 1)
       .setPosition(ANCHOR.mound.x, ANCHOR.mound.feet + (63 - meta.feet));
