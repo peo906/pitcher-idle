@@ -188,7 +188,13 @@ export const THROW = {
   pro: { key: 'throw_pro', file: 'pitcher_pro_throw.png', w: 92, h: 88,
     release: 9, follow: [10, 11, 12, 13, 14, 15], legLift: [4, 8], ball: { x: 30, y: 20 }, feet: 75, cx: 45.5 },
 };
-// 삼진 세리머니 (fist pump), played on the strikeout catch
-export const CELEBRATE = {
-  pro: { key: 'celebrate_pro', file: 'pitcher_pro_celebrate.png', w: 92, h: 88, frames: 17, ms: 1300, feet: 75, cx: 45.5 },
+// pitcher reactions: k = 삼진 세리머니 (fist pump), hit = 안타 고개 흔들기, hr = 홈런 절망 (face shadow baked in)
+const PRO_CELL = { w: 92, h: 88, feet: 75, cx: 45.5 };
+export const REACT = {
+  pro: {
+    k:   { ...PRO_CELL, key: 'celebrate_pro', file: 'pitcher_pro_celebrate.png', frames: 17, ms: 1300 },
+    hit: { ...PRO_CELL, key: 'react_hit_pro', file: 'pitcher_pro_hit.png', frames: 13, ms: 1100 },
+    hr:  { ...PRO_CELL, key: 'react_hr_pro', file: 'pitcher_pro_hr.png', frames: 17, ms: 2000 },
+  },
 };
+export const REACT_DEFS = Object.values(REACT).flatMap(r => Object.values(r));
